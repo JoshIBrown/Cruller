@@ -187,30 +187,18 @@ Either way it puts back everything that job moved, exactly where it came from,
 using the job's own log. Nothing is overwritten; anything that can't go back is
 reported. Run it with a wrong name and it lists the jobs that can be undone.
 
-## Checking its work
+## Checking where the line belongs
 
     ./crull "/path/to/photos" --hunt
 
-Changes nothing, moves nothing. It analyses the folder, then writes **100
-numbered sheets** to `Close Calls/<job>/` in your working folder. Each sheet
-shows a pair of photographs whole, and underneath them **the exact spot where
-they differ most, at full size** — so you never have to search two photographs
-for a difference.
+Changes nothing, moves nothing. The same blind page as `--audit`, asking a
+wider question: instead of only the culls, it draws pairs from across the whole
+score range — confident culls, confident keeps, and everything between — so
+your answers map out where your eye and the tool disagree.
 
-The sheets are blind: no verdict, no score, and the numbering is shuffled so it
-tells you nothing. Sort them in Finder into the two folders provided:
-
-    same/         you cannot tell them apart at full size
-    different/    you can
-
-That sort is the ground truth this tool is tuned against. The pairs are drawn
-from the whole score range — confident culls, confident keeps, and everything
-between — so your answers map out exactly where your eye and the tool disagree.
-The answer key is written to `Records/` under the hunt's timestamp; don't look
-at it until you've sorted.
-
-Each hunt also appends its numbers to `Records/hunts.md`. The images are thrown
-away next run; the findings are not.
+It reports two rates, because there are two ways to be wrong: photographs it
+would have lost, and duplicates it would have left behind. Every pair is
+written to `Records/audit <timestamp>.csv` with what you said.
 
 ## Anything else
 

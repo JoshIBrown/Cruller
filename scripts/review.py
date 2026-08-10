@@ -50,9 +50,51 @@ JUDGE_FOOT = """
   <button onclick="finish('quit')">Quit \u2014 move nothing</button>"""
 
 
-def _page(pairs, thumbs, title, subtitle, blind=False):
+DETAIL_HALF = 240          # the patch is shown at 1:1, so this is real pixels
+
+
+def _details(pairs, out_dir):
+    """The patch where each pair differs most, cropped from both originals at 1:1.
+
+    Nobody should have to search two photographs for a difference the tool has
+    already located, and at page size a small change is invisible — which is
+    the whole question when the pair is a burst frame.
+    """
+    made = {}
+    for n, pair in enumerate(pairs):
+        spot = pair.get("detail")
+        if not spot:
+            continue
+        fx, fy, dx, dy = spot
+        try:
+            a, wa = _patch(pair["keeper_path"], fx, fy)
+            # The same physical patch in the other frame: shifted by the
+            # measured camera motion, and scaled if the resolutions differ.
+            b, wb = _patch(pair["culled_path"], fx - dx, fy - dy)
+            if wa and wb != wa:
+                b = b.resize((int(b.width * wa / wb) or 1,
+                              int(b.height * wa / wb) or 1))
+            names = (f"{n:04d}-a.jpg", f"{n:04d}-b.jpg")
+            a.save(os.path.join(out_dir, names[0]), quality=90)
+            b.save(os.path.join(out_dir, names[1]), quality=90)
+            made[n] = names
+        except Exception:
+            continue
+    return made
+
+
+def _patch(path, fx, fy):
+    im = open_image(path).convert("RGB")
+    x, y = int(fx * im.width), int(fy * im.height)
+    return im.crop((max(0, x - DETAIL_HALF), max(0, y - DETAIL_HALF),
+                    min(im.width, x + DETAIL_HALF),
+                    min(im.height, y + DETAIL_HALF))), im.width
+
+
+def _page(pairs, thumbs, title, subtitle, blind=False, details=None):
     foot = BLIND_FOOT if blind else JUDGE_FOOT
     blind_js = "true" if blind else "false"
+    details = details or {}
     rows = []
     for n, p in enumerate(pairs):
         ka, kb = thumbs.get(p["keeper_path"]), thumbs.get(p["culled_path"])
@@ -62,10 +104,17 @@ def _page(pairs, thumbs, title, subtitle, blind=False):
             # Nothing on the page may say which frame the tool chose, or which
             # side it is on: the answer to the question must not be visible
             # while the question is being asked.
+            da, db = details.get(n, (None, None))
             if p.get("flip"):
                 ka, kb = kb, ka
+                da, db = db, da
+            has = "" if not da else " with-spot"
+            spot = ("" if not da else f"""
+  <div class="spot"><div class="lbl">where they differ most, at full size</div>
+    <div class="frames"><figure><img src="img/{da}" loading="lazy"></figure>
+      <figure><img src="img/{db}" loading="lazy"></figure></div></div>""")
             rows.append(f"""
-<section class="pair" data-n="{n}" data-group="{n}">
+<section class="pair{has}" data-n="{n}" data-group="{n}">
   <div class="head"><span class="num">{n + 1}</span>
     <span class="state" id="s{n}"></span></div>
   <div class="frames">
@@ -73,7 +122,7 @@ def _page(pairs, thumbs, title, subtitle, blind=False):
       <img src="img/{ka}" loading="lazy"></a></figure>
     <figure><a href="img/{kb}" target="_blank">
       <img src="img/{kb}" loading="lazy"></a></figure>
-  </div>
+  </div>{spot}
   <div class="acts">
     <button type="button" onclick="same({n})">The same photograph</button>
     <button type="button" onclick="differ({n})">Different photographs</button>
@@ -122,6 +171,12 @@ def _page(pairs, thumbs, title, subtitle, blind=False):
  .num {{ color:#6f6f78; font-variant-numeric:tabular-nums }}
  .why {{ color:#c9c9d1 }} .diff {{ color:#8a8a93; font-size:13px }}
  .kin {{ color:#8a8a93; font-size:13px }}
+ .spot {{ margin-top:10px }}
+ .spot .lbl {{ color:#8a8a93; font-size:12px; margin-bottom:5px }}
+ /* The whole pair still has to fit one screen, so the frames give up the
+    room the patch needs rather than pushing the buttons off the bottom. */
+ .with-spot .frames > figure > a > img {{ max-height:42vh }}
+ .spot img {{ max-height:22vh; width:auto; max-width:100%; margin:0 auto }}
  .state {{ margin-left:auto; font-size:13px }}
  .frames {{ display:grid; grid-template-columns:1fr 1fr; gap:10px }}
  /* Grid items refuse to shrink below their content, and a photograph's
@@ -223,9 +278,11 @@ def ask(pairs, out_dir, title, subtitle, blind=False):
     """
     if not pairs:
         return None, {}
-    thumbs = _thumbs(pairs, os.path.join(out_dir, "img"))
+    img_dir = os.path.join(out_dir, "img")
+    thumbs = _thumbs(pairs, img_dir)
+    details = _details(pairs, img_dir) if blind else {}
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as fh:
-        fh.write(_page(pairs, thumbs, title, subtitle, blind))
+        fh.write(_page(pairs, thumbs, title, subtitle, blind, details))
 
     answer = {}
     ready = threading.Event()

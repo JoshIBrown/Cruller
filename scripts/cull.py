@@ -18,9 +18,9 @@ a page, where each cull is accepted, refused or turned round on its own. The
 setting lives for that folder, is written into its records, and does not carry
 into the next run.
 """
-import argparse, csv, datetime, hashlib, os, shutil, subprocess, sys, tempfile, time
+import argparse, csv, datetime, hashlib, math, os, shutil, subprocess, sys
+import tempfile, time
 from collections import defaultdict
-from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from loaders import open_image
@@ -475,253 +475,143 @@ def record_settings(job, session):
         print(f"  \u26a0 could not record the setting for {job}: {str(e)[:60]}")
 
 
-def _log_hunt(stamp, folder, picked, limit, judged):
-    """One paragraph per hunt, appended to a single ledger in Records.
+def audit(folder, opts, session, top=30, spread=False):
+    """Judge the tool's own decisions blind, and say how often it is wrong.
 
-    A few hundred bytes each. The images are thrown away; this is not.
-    """
-    if not DEFAULT_RECORDS:
-        return
-    try:
-        scores = [p[2] for p in picked]
-        n_cull = sum(1 for p in picked if p[4])
-        path = os.path.join(DEFAULT_RECORDS, "hunts.md")
-        new = not os.path.exists(path)
-        with open(path, "a") as fh:
-            if new:
-                fh.write("# Hunts\n\nWhat each review of the tool's own "
-                         "decisions turned up. The images are thrown away; "
-                         "this is not.\n")
-            fh.write(f"\n## {stamp} \u00b7 {os.path.basename(folder.rstrip(os.sep))}\n\n")
-            fh.write(f"- {judged:,} pairs judged at full size; showed {len(picked)} "
-                     f"({n_cull} culled, {len(picked) - n_cull} kept), scoring "
-                     f"{min(scores):.0f}\u2013{max(scores):.0f} against a limit of {limit:.0f}\n")
-            fh.write(f"- answers: `hunt {stamp} - pairs.csv`, sorted folders in Close Calls\n")
-            fh.write("- **what the sort showed:** \n")
-    except OSError:
-        pass
+    Reviewing a plan tells you what a folder needs. It cannot tell you how
+    often the tool is wrong, because by the end you have been told which frame
+    it chose every time and cannot unsee it. So this asks the same question
+    with the answers covered: no labels, no filenames, and the side each frame
+    lands on decided by a coin.
 
+    Under each pair, the patch where the two differ most, cropped from both
+    originals at 1:1 — nobody should have to search two photographs for a
+    difference the tool has already located, and at page size a moved hand is
+    invisible.
 
-def hunt(folder, opts, session, top=100):
-    """Turn a run into a blind sorting exercise. Moves nothing, changes nothing.
+    Two samples, because there are two questions:
 
-    The goal: lose every pair a reviewer cannot tell apart, keep every
-    pair he can, judged **at full size**. So each sheet shows the two frames
-    whole, and underneath them the exact patch where they differ most, cropped
-    from both originals at 1:1 — nobody should have to search two photographs
-    for a difference the tool has already located.
+    - **The culls, drawn uniformly** — "of the photographs this would move, how
+      many should not be". That only comes from a sample drawn the way the plan
+      was, so stratifying here would answer about the sample instead.
+    - **`spread`: everything judged, stratified across the range** — for asking
+      where the line belongs. It includes pairs the tool kept, because a wrong
+      keep defeats the point of the tool as surely as a wrong cull loses a
+      photograph. Ranking by distance from the limit was tried and shows only
+      pairs beside it, which proves a boundary is a boundary and nothing else.
 
-    Three lessons from the first hunt are built in:
-
-    - **Blind.** The sheets carry a number and nothing else. The first version
-      printed CULLED or KEPT on each pair, which told the reviewer the answer
-      before they had looked.
-    - **Both sides.** A wrong cull loses a photograph; a wrong keep defeats the
-      point of the tool. Under the stated goal both are failures.
-    - **Spread and shuffled.** Stratified across the whole score range, then
-      shuffled so the sheet number says nothing about the score. Ranking by
-      distance from the limit shows only pairs beside it, which proves that a
-      boundary is a boundary and nothing else.
-
-    The person sorts the sheets into `same/` and `different/` in Finder. The
-    number-to-pair mapping goes only to Records, keeping the sort blind.
+    The interval is Wilson's, which behaves at small counts and near-zero
+    rates, where the textbook interval returns a negative lower bound.
     """
     import random
     scored = (session or {}).get("scored") or []
     limit = (session or {}).get("result", {}).get("block", sift.DUP_BLOCK)
     usable = [r for r in scored if r[5] is not None]
     if not usable:
-        print("  nothing was judged at full size \u2014 nothing to sort")
+        print("  nothing was judged at full size \u2014 nothing to audit")
         return
-    lo, hi = min(r[2] for r in usable), max(r[2] for r in usable)
-    bands = 10
-    width = (hi - lo) / bands or 1.0
-    buckets = defaultdict(list)
-    for r in usable:
-        buckets[min(bands - 1, int((r[2] - lo) / width))].append(r)
-    per = max(1, top // bands)
-    picked = []
-    for bkey in sorted(buckets):
-        rows = buckets[bkey]
-        random.Random(len(rows)).shuffle(rows)
-        picked += rows[:per]
-    if len(picked) < top:
-        # Top up a short stratified sample from anywhere.
-        rest = [r for r in usable if r not in picked]
-        random.Random(top).shuffle(rest)
-        picked += rest[:top - len(picked)]
-    picked = picked[:top]
-    stamp = datetime.datetime.now().strftime("%Y.%m.%d %H%M")
-    random.Random(stamp).shuffle(picked)      # sheet number must not encode score
 
-    out_dir = opts["huntdir"]
-    os.makedirs(out_dir, exist_ok=True)
-    for f in os.listdir(out_dir):
-        p = os.path.join(out_dir, f)
-        try:
-            if f.lower().endswith((".jpg", ".csv")):
-                os.remove(p)
-        except OSError:
-            pass
-    for sub in ("same", "different"):
-        os.makedirs(os.path.join(out_dir, sub), exist_ok=True)
-
-    # The answer key lives in Records, not beside the sheets: the sort is blind.
-    with open(os.path.join(DEFAULT_RECORDS, f"hunt {stamp} - pairs.csv"),
-              "w", newline="") as fh:
-        w = csv.writer(fh)
-        w.writerow(["sheet", "verdict", "score", "limit", "ratio", "kept", "other"])
-        for n, (pa, pb, blk, rat, ok, where, dx, dy) in enumerate(picked, 1):
-            w.writerow([f"{n:03d}", "culled" if ok else "kept", blk, limit, rat,
-                        os.path.relpath(pa, folder), os.path.relpath(pb, folder)])
-
-    W, PAD, LBL, CROP = 700, 8, 30, 240
-    try:
-        font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 22)
-    except Exception:
-        try:
-            font = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
-        except Exception:
-            font = ImageFont.load_default()
-
-    def crop_native(path, fx, fy, half):
-        im = open_image(path).convert("RGB")
-        x, y = int(fx * im.width), int(fy * im.height)
-        box = (max(0, x - half), max(0, y - half),
-               min(im.width, x + half), min(im.height, y + half))
-        return im.crop(box), im.width
-
-    made = 0
-    for n, (pa, pb, blk, rat, ok, where, dx, dy) in enumerate(picked, 1):
-        progress(n, len(picked), "sheets")
-        try:
-            fx, fy = where
-            ca, wa = crop_native(pa, fx, fy, CROP)
-            # The same physical patch in the other frame: shifted by the
-            # measured camera motion, and scaled if the resolutions differ.
-            cb, wb = crop_native(pb, fx - dx, fy - dy,
-                                 max(24, int(CROP * 1.0)))
-            if wb != wa and wa:
-                cb = cb.resize((int(cb.width * wa / wb) or 1,
-                                int(cb.height * wa / wb) or 1))
-            ia = open_image(pa).convert("RGB"); ib = open_image(pb).convert("RGB")
-        except Exception:
-            continue
-        ia.thumbnail((W, W)); ib.thumbnail((W, W))
-        ch = max(ca.height, cb.height, 1)
-        H = max(ia.height, ib.height) + ch + LBL + 22
-        sheet = Image.new("RGB", (W * 2 + PAD * 3, H + 8), (20, 20, 22))
-        d = ImageDraw.Draw(sheet)
-        d.text((PAD, 4), f"{n:03d}", fill=(200, 200, 205), font=font)
-        y0 = LBL
-        sheet.paste(ia, (PAD, y0)); sheet.paste(ib, (W + PAD * 2, y0))
-        y1 = y0 + max(ia.height, ib.height) + 14
-        d.text((PAD, y1 - 12), "the most different spot, at full size:",
-               fill=(140, 140, 145), font=font)
-        cx = (W - ca.width) // 2
-        sheet.paste(ca, (PAD + max(0, cx), y1 + 12))
-        sheet.paste(cb, (W + PAD * 2 + max(0, (W - cb.width) // 2), y1 + 12))
-        sheet.save(os.path.join(out_dir, f"{n:03d}.jpg"), quality=88)
-        made += 1
-    _log_hunt(stamp, folder, picked, limit, len(scored))
-    print(f"  {len(scored):,} pairs judged \u00b7 {made} sheets, blind, spread "
-          f"across the whole range")
-    print(f"  sort them into same/ and different/ \u2014 same means you cannot "
-          f"tell them apart at full size")
-    print(f"  the answer key is Records/hunt {stamp} - pairs.csv; do not peek")
-    reveal(out_dir)
-
-
-def audit(folder, opts, session, top=30):
-    """An honest error rate for a plan, from a blind look at a random sample.
-
-    Reviewing every cull tells you what this folder needs. It does not tell you
-    how often the tool is wrong, because by the end you have seen the answers
-    and cannot unsee them. This asks the same question with the answers
-    covered: culls drawn at random, no labels, and the side each frame lands on
-    decided by a coin, so nothing on the page hints at which one the tool chose.
-
-    Random and not stratified: the number wanted is "of the photographs this
-    would move, how many are wrong", and that can only come from a sample drawn
-    the way the plan was.
-
-    The interval is Wilson's, which behaves when the count is small or the rate
-    is near zero — both of which is exactly where this lands, and where the
-    textbook interval gives nonsense like a negative lower bound.
-    """
-    import math
-    import random
-    scored = (session or {}).get("scored") or []
-    limit = (session or {}).get("result", {}).get("block", sift.DUP_BLOCK)
-    culls = [r for r in scored if r[5] is not None and r[4]]
-    if not culls:
-        print("  nothing would be culled at this setting \u2014 nothing to audit")
-        return
     rng = random.Random()
-    rng.shuffle(culls)
-    picked = culls[:top]
+    if spread:
+        lo, hi = min(r[2] for r in usable), max(r[2] for r in usable)
+        bands = 10
+        width = (hi - lo) / bands or 1.0
+        buckets = defaultdict(list)
+        for r in usable:
+            buckets[min(bands - 1, int((r[2] - lo) / width))].append(r)
+        picked = []
+        for key in sorted(buckets):
+            rows = buckets[key]
+            rng.shuffle(rows)
+            picked += rows[:max(1, top // bands)]
+        rest = [r for r in usable if r not in picked]
+        rng.shuffle(rest)
+        picked = (picked + rest)[:top]
+        drawn_from = len(usable)
+    else:
+        picked = [r for r in usable if r[4]]
+        if not picked:
+            print("  nothing would be culled at this setting \u2014 nothing to audit")
+            return
+        drawn_from = len(picked)
+        rng.shuffle(picked)
+        picked = picked[:top]
+    rng.shuffle(picked)          # position must not encode the score
 
     pairs = [{"group": n, "keeper": os.path.relpath(r[0], folder),
               "culled": os.path.relpath(r[1], folder),
               "keeper_path": r[0], "culled_path": r[1],
-              "why": "", "difference": None, "score": r[2],
+              "why": "", "difference": None, "score": r[2], "culled_by_tool": r[4],
+              "detail": (r[5][0], r[5][1], r[6], r[7]) if r[5] else None,
               "flip": rng.random() < 0.5}
              for n, r in enumerate(picked)]
 
-    print(f"  {len(pairs)} of the {len(culls):,} culls this setting would make, "
-          f"drawn at random")
-    if len(culls) < 20:
+    kind = "pairs from the whole range" if spread else "culls"
+    print(f"  {len(pairs)} {kind}, drawn at random from {drawn_from:,}")
+    if not spread and drawn_from < 20:
         print("  that is a small plan, so expect a wide interval from it")
     action, answers = review.ask(
         pairs, opts["reviewdir"], f"blind audit \u2014 {len(pairs)} pairs",
-        "same photograph, or different? the tool's answer is hidden",
+        "the same photograph, or different? the tool's answer is hidden",
         blind=True)
     if action is None:
         print("  audit closed without an answer")
         return
 
-    judged = [(n, p) for n, p in enumerate(pairs)
-              if (answers.get(str(n)) or {}).get("denied")
-              or (answers.get(str(n)) or {}).get("swapped")]
-    if not judged:
+    said = {}
+    for n in range(len(pairs)):
+        a = answers.get(str(n)) or {}
+        if a.get("denied"):
+            said[n] = "different"
+        elif a.get("swapped"):
+            said[n] = "same"
+    if not said:
         print("  nothing was judged, so there is no rate to give")
         return
-    wrong = [(n, p) for n, p in judged if answers[str(n)].get("denied")]
-    n_j, k = len(judged), len(wrong)
-    rate = k / n_j
-
-    z = 1.96
-    centre = (rate + z * z / (2 * n_j)) / (1 + z * z / n_j)
-    half = (z / (1 + z * z / n_j)) * math.sqrt(
-        rate * (1 - rate) / n_j + z * z / (4 * n_j * n_j))
-    lo, hi = max(0.0, centre - half), min(1.0, centre + half)
 
     stamp = datetime.datetime.now().strftime("%Y.%m.%d %H%M")
     if DEFAULT_RECORDS:
         with open(os.path.join(DEFAULT_RECORDS, f"audit {stamp}.csv"),
                   "w", newline="") as fh:
             w = csv.writer(fh)
-            w.writerow(["kept", "other", "score", "limit", "you_said", "note"])
+            w.writerow(["kept", "other", "score", "limit", "tool_said",
+                        "you_said", "note"])
             for n, pair in enumerate(pairs):
-                a = answers.get(str(n)) or {}
-                said = ("different" if a.get("denied") else
-                        "same" if a.get("swapped") else "")
                 w.writerow([pair["keeper"], pair["culled"],
-                            round(pair["score"], 2), round(limit, 2), said,
-                            (a.get("reason") or "").strip()])
+                            round(pair["score"], 2), round(limit, 2),
+                            "cull" if pair["culled_by_tool"] else "keep",
+                            said.get(n, ""),
+                            ((answers.get(str(n)) or {}).get("reason") or "").strip()])
 
     print(f"\n  audit {stamp}")
-    print(f"  {n_j} culls judged blind, drawn at random from the plan")
-    print(f"  {k} of them wrong \u00b7 {rate * 100:.0f}%")
-    print(f"  the true rate is between {lo * 100:.0f}% and {hi * 100:.0f}%, "
+    _rate("culls", [(n, p) for n, p in enumerate(pairs)
+                    if n in said and p["culled_by_tool"]], said, "different",
+          "wrong \u2014 photographs it would have lost", limit)
+    if spread:
+        _rate("keeps", [(n, p) for n, p in enumerate(pairs)
+                        if n in said and not p["culled_by_tool"]], said, "same",
+              "wrong \u2014 duplicates it would have left behind", limit)
+
+
+def _rate(what, judged, said, wrong_when, consequence, limit):
+    """One proportion with its interval, and the pairs behind it."""
+    if not judged:
+        return
+    wrong = [(n, p) for n, p in judged if said[n] == wrong_when]
+    n_j, k = len(judged), len(wrong)
+    rate = k / n_j
+    z = 1.96
+    centre = (rate + z * z / (2 * n_j)) / (1 + z * z / n_j)
+    half = (z / (1 + z * z / n_j)) * math.sqrt(
+        rate * (1 - rate) / n_j + z * z / (4 * n_j * n_j))
+    lo, hi = max(0.0, centre - half), min(1.0, centre + half)
+    noun = what if n_j != 1 else what[:-1]
+    print(f"  {n_j} {noun} judged \u00b7 {k} {consequence} \u00b7 {rate * 100:.0f}%")
+    print(f"    the true rate is between {lo * 100:.0f}% and {hi * 100:.0f}%, "
           f"nineteen times in twenty")
-    if wrong:
-        print("\n  the ones you called different:")
-        for _, pair in wrong:
-            print(f"    scored {pair['score']:.1f} against {limit:.0f}")
-            print(f"        kept {pair['keeper']}")
-            print(f"        lost {pair['culled']}")
+    for _, pair in wrong:
+        print(f"      scored {pair['score']:.1f} against {limit:.0f} \u00b7 "
+              f"{pair['keeper']} / {pair['culled']}")
 
 
 def analyse(folder, opts):
@@ -1226,19 +1116,6 @@ def undo(job, hint=True):
     refresh_dashboard()
 
 
-def reveal(path):
-    """Open a folder in the platform's file browser; silent if impossible."""
-    try:
-        if sys.platform == "darwin":
-            subprocess.run(["open", path], capture_output=True)
-        elif sys.platform == "win32":
-            os.startfile(path)                       # noqa — Windows only
-        else:
-            subprocess.run(["xdg-open", path], capture_output=True)
-    except Exception:
-        pass
-
-
 def choose_folder(prompt):
     """A native folder-picker dialog; None if unavailable or cancelled.
 
@@ -1318,8 +1195,8 @@ def main():
     ap.add_argument("--cull-dir", default=None)
     ap.add_argument("--hunt", nargs="?", type=int, const=100, default=None,
                     metavar="N",
-                    help="write N pairs as blind sheets to sort into same/"
-                         "different. Moves nothing")
+                    help="judge N pairs blind from across the whole range, "
+                         "keeps included, to see where the line belongs")
     ap.add_argument("--no-prompt", action="store_true", help="never ask; just report")
     ap.add_argument("--verbose", action="store_true",
                     help="full diagnostics: thresholds, bands, verification stats")
@@ -1433,7 +1310,6 @@ def main():
             retire_stale_plans(folder, keep=job)   # re-dragging a folder = fresh look
     opts["manifest"] = os.path.join(DEFAULT_RECORDS, f"{job} - plan.csv")
     opts["reviewdir"] = os.path.join(DEFAULT_REVIEWS, job)
-    opts["huntdir"] = os.path.join(WORKING_DIR, "Close Calls", job)
 
     print(f"\n\u25cf {os.path.basename(folder)}"
           + (f" \u2014 a selection of {len(sel)} files" if sel else ""))
@@ -1457,7 +1333,7 @@ def main():
     opts["no_summary"] = interactive and not (a.hunt or a.audit)
     session = analyse(folder, opts)
     if a.hunt:
-        hunt(folder, opts, session, a.hunt)
+        audit(folder, opts, session, a.hunt, spread=True)
         return
 
     if a.audit:
