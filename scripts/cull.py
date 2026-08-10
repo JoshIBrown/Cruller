@@ -301,7 +301,9 @@ def outcomes(session, manifest):
                 r = session["regroup"](*limits_at(limit))
             rows = [x for x in csv.DictReader(open(manifest))
                     if x["verdict"] == "REDUNDANT"]
-            r["judged"] = sum(1 for x in rows if x["why"] not in MECHANICAL)
+            # Every cull is shown, so what a setting offers to review is
+            # simply what it would cull.
+            r["judged"] = len(rows)
             r["limit"] = limit
             r["rows"] = rows
             seen[key] = r
@@ -390,10 +392,11 @@ def show_outcomes(found, n_files, at):
     w = max(len(f"{n:,}") for _, n, _, _ in found)
     for i, (lim, n, freed, judged) in enumerate(found, 1):
         mark = "   \u2190 reviewing" if at is not None and i == at else ""
-        seen = f"{judged:,} to review" if judged else "nothing to review"
+        # No count of what there is to review: every cull is shown, so it would
+        # only repeat the number two columns to the left.
         print(f"    {i}   cull {n:>{w},} of {n_files:,}"
               f"   {n / n_files * 100:5.1f}% of the folder"
-              f"   {size_text(freed):>7}   {seen}{mark}")
+              f"   {size_text(freed):>7}{mark}")
 
 
 def ask_next(found, n_files, at, size):
@@ -640,7 +643,6 @@ MECHANICAL = {"exact copy", "identical picture", "smaller copy", "resave",
 # That ranking also failed its own promise: across the 115 sheets reviewed
 # in one review the rejection rate was flat (13%, 10%, 13% by third), so it was
 # not finding the wrong calls. Raw difference is what he asked to see.
-MAX_SHOWN = 120
 # Above 1.0 a cull was never actually cleared against its own keeper. Grouping
 # now makes that impossible, so this should never fire; if it does, the
 # guarantee has broken and the tag says so.
@@ -648,51 +650,48 @@ MARGIN_CHAIN = 1.0
 
 
 def spot_checks(folder, manifest, out_dir, count=None):
-    """Build the proof images. The run decides how many, not a knob.
+    """Build the proof images: one for every photograph the run would move.
 
-    Small runs show every call. Big runs show every call that came close to
-    the limit — every mistake found so far has been one of those — plus enough
-    sampled ordinary calls to bound the error rate. So a run of clean bursts
-    produces a short review and a run full of coin flips produces a long one,
-    which is exactly the attention each deserves.
+    Every cull, including the ones settled by rule. A relationship the tool can
+    prove is still a photograph leaving, and the only way to know the proof is
+    sound is to have looked at one.
 
-    `count` forces a fixed total (old behaviour); 0 skips proof images.
+    Ordered by how different the two frames are, most different first, so the
+    least confident call is the first thing seen. Work down until it stops
+    being interesting: what remains below is more alike, not less.
+
+    `count` forces a fixed total; 0 skips proof images.
     """
     rows = list(csv.DictReader(open(manifest)))
     by_group = defaultdict(list)
     for r in rows:
         by_group[r["group"]].append(r)
 
-    # One proof image per group, not per file. A decision is "keep this one out
-    # of these six", so showing it as five separate pairs of the same keeper
-    # made a review of 136 real decisions look like 244 near-identical photos.
+    # One proof image per culled photograph. A group of six shows five pairs,
+    # each against the frame that replaces it, because five photographs are
+    # leaving and each is its own decision.
     pairs = []
     for gid, members in by_group.items():
         keep = next((m for m in members if m["verdict"] == "KEEP"), None)
         if not keep:
             continue
-        losers = []
         for m in members:
-            if m["verdict"] != "REDUNDANT" or m["why"] in MECHANICAL:
+            if m["verdict"] != "REDUNDANT":
                 continue
             try:
                 margin = float(m.get("margin") or 0)
             except ValueError:
                 margin = 0.0
             try:
-                block = float(m.get("block_pct") or 0)
-            except ValueError:
-                block = 0.0
-            losers.append((m["file"], m["why"], margin,
-                           m.get("why_inferior", ""), block))
-        if losers:
-            # Only the group's most different loser is worth showing. If that one
-            # is a fair cull then every other member is closer to the keeper than
-            # it, so it is fair too — one pair settles the whole group.
-            losers.sort(key=lambda x: -x[4])
-            f, why, margin, because, block = losers[0]
-            pairs.append((gid, keep["file"], f, why, margin, len(losers),
-                          because, block))
+                block = float(m["block_pct"])
+            except (KeyError, TypeError, ValueError):
+                # No difference recorded: the comparison never produced one,
+                # which happens when it crashed. Not knowing is the least
+                # confident state there is, so it leads the review rather than
+                # sinking to the bottom the way a zero would.
+                block = None
+            pairs.append((gid, keep["file"], m["file"], m["why"], margin, 1,
+                          m.get("why_inferior", ""), block))
     n_culls = sum(1 for r in rows if r["verdict"] == "REDUNDANT")
     n_mech = sum(1 for r in rows
                  if r["verdict"] == "REDUNDANT" and r["why"] in MECHANICAL)
@@ -701,10 +700,11 @@ def spot_checks(folder, manifest, out_dir, count=None):
     judged = pairs
     total = len(pairs)
 
-    by_difference = sorted(judged, key=lambda p: -p[7])
-    shown = by_difference[:count if count is not None else MAX_SHOWN]
+    # Most different first, and anything whose difference is unknown ahead of
+    # all of it.
+    by_difference = sorted(judged, key=lambda p: (p[7] is not None, -(p[7] or 0)))
+    shown = by_difference[:count] if count is not None else by_difference
     chosen = [(p, "chain" if p[4] > MARGIN_CHAIN else "closest") for p in shown]
-    n_quiet = len(judged) - len(chosen)
 
     # A fresh analysis replaces the old proof images rather than adding to them.
     # Numbering restarts each run, so leaving the previous set behind would mix
@@ -784,9 +784,8 @@ def spot_checks(folder, manifest, out_dir, count=None):
             for (gid, keep, drop, why, margin, n_losers, because,
                  block), kind in chosen:
                 w.writerow([keep, drop, why, round(margin, 3), kind, n_losers,
-                            because, round(block, 1)])
+                            because, "" if block is None else round(block, 1)])
     counts = {k: sum(1 for _, kind in chosen if kind == k) for k in ("chain", "closest")}
-    counts["quiet"] = n_quiet
     counts["groups"] = len(judged)
     return written, n_culls, counts, n_mech
 
