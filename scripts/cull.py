@@ -511,7 +511,7 @@ def _log_hunt(stamp, folder, picked, limit, judged):
         pass
 
 
-def hunt(folder, opts, session, top=100):
+def hunt(folder, opts, session, top=100, uniform=False):
     """Turn a run into a blind sorting exercise. Moves nothing, changes nothing.
 
     The goal: lose every pair a reviewer cannot tell apart, keep every
@@ -528,9 +528,15 @@ def hunt(folder, opts, session, top=100):
     - **Both sides.** A wrong cull loses a photograph; a wrong keep defeats the
       point of the tool. Under the stated goal both are failures.
     - **Spread and shuffled.** Stratified across the whole score range, then
-      shuffled so the sheet number says nothing about the score. The first
-      version ranked by distance from the limit, and everything the reviewer
-      saw was within 0.15 of it — proof only that a boundary is a boundary.
+      shuffled so the sheet number says nothing about the score. Ranking by
+      distance from the limit shows only pairs beside it, which proves that a
+      boundary is a boundary and nothing else.
+
+    `uniform` changes the question. Stratified sampling is for finding where
+    the line should sit: it deliberately over-shows rare scores. An error rate
+    needs the opposite — every cull in the plan equally likely — because the
+    number wanted is "of the photographs this would move, how many are wrong",
+    and that can only come from a sample drawn the way the plan was.
 
     The person sorts the sheets into `same/` and `different/` in Finder. The
     number-to-pair mapping goes only to Records, keeping the sort blind.
@@ -542,6 +548,19 @@ def hunt(folder, opts, session, top=100):
     if not usable:
         print("  nothing was judged at full size \u2014 nothing to sort")
         return
+    if uniform:
+        # Every cull equally likely: the sample must be drawn the way the plan
+        # was, or the rate it produces describes the sample and not the plan.
+        culls = [r for r in usable if r[4]]
+        if not culls:
+            print("  nothing would be culled at this setting — nothing to audit")
+            return
+        random.Random().shuffle(culls)
+        picked = culls[:top]
+        drawn_from = len(culls)
+    else:
+        picked, drawn_from = None, len(usable)
+
     lo, hi = min(r[2] for r in usable), max(r[2] for r in usable)
     bands = 10
     width = (hi - lo) / bands or 1.0
@@ -549,12 +568,16 @@ def hunt(folder, opts, session, top=100):
     for r in usable:
         buckets[min(bands - 1, int((r[2] - lo) / width))].append(r)
     per = max(1, top // bands)
-    picked = []
-    for bkey in sorted(buckets):
+    if picked is None:
+        picked = []
+    for bkey in sorted(buckets) if not uniform else ():
         rows = buckets[bkey]
         random.Random(len(rows)).shuffle(rows)
         picked += rows[:per]
-    if len(picked) < top:
+    if len(picked) < top and not uniform:
+        # Top up a short stratified sample from anywhere. Never for an audit:
+        # its sample is the culls and nothing else, and padding it with pairs
+        # that were not culled would put a number on the wrong population.
         rest = [r for r in usable if r not in picked]
         random.Random(top).shuffle(rest)
         picked += rest[:top - len(picked)]
@@ -633,12 +656,79 @@ def hunt(folder, opts, session, top=100):
         sheet.save(os.path.join(out_dir, f"{n:03d}.jpg"), quality=88)
         made += 1
     _log_hunt(stamp, folder, picked, limit, len(scored))
-    print(f"  {len(scored):,} pairs judged \u00b7 {made} sheets, blind, spread "
-          f"across the whole range")
-    print(f"  sort them into same/ and different/ \u2014 same means you cannot "
-          f"tell them apart at full size")
+    if uniform:
+        short = ("" if made >= min(top, drawn_from)
+                 else f" — only {made} could be drawn")
+        print(f"  {made} of the {drawn_from:,} culls this setting would make, "
+              f"drawn at random{short}")
+        if drawn_from < 20:
+            print(f"  that is a small plan: expect a wide interval from it")
+        print(f"  sort them into same/ and different/ \u2014 different means "
+              f"the tool got it wrong")
+        print(f"  then: ./crull --audit-result")
+    else:
+        print(f"  {len(scored):,} pairs judged \u00b7 {made} sheets, blind, spread "
+              f"across the whole range")
+        print(f"  sort them into same/ and different/ \u2014 same means you cannot "
+              f"tell them apart at full size")
     print(f"  the answer key is Records/hunt {stamp} - pairs.csv; do not peek")
     reveal(out_dir)
+
+
+def audit_result():
+    """Read a sorted audit and say what the tool's error rate is.
+
+    The interval is Wilson's, which behaves when the count is small or the rate
+    is near zero — both of which is exactly where this lands, and where the
+    textbook interval gives nonsense like a negative lower bound.
+    """
+    import glob
+    import math
+    keys = sorted(glob.glob(os.path.join(DEFAULT_RECORDS, "hunt * - pairs.csv")))
+    if not keys:
+        sys.exit("no audit has been drawn yet")
+    key = keys[-1]
+    stamp = os.path.basename(key)[len("hunt "):-len(" - pairs.csv")]
+    answers = {r["sheet"]: r for r in csv.DictReader(open(key))}
+
+    sorted_into = {}
+    for base in sorted(glob.glob(os.path.join(WORKING_DIR, "Close Calls", "*"))):
+        for verdict in ("same", "different"):
+            d = os.path.join(base, verdict)
+            if not os.path.isdir(d):
+                continue
+            for f in os.listdir(d):
+                if f.lower().endswith(".jpg"):
+                    sorted_into[os.path.splitext(f)[0]] = verdict
+    if not sorted_into:
+        sys.exit("nothing has been sorted yet — put each sheet in same/ or different/")
+
+    culls = [(n, v) for n, v in sorted_into.items()
+             if answers.get(n, {}).get("verdict") == "culled"]
+    if not culls:
+        sys.exit("none of the sorted sheets were culls, so there is no rate to give")
+    n = len(culls)
+    wrong = sum(1 for _, v in culls if v == "different")
+    p = wrong / n
+
+    z = 1.96
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = (z / (1 + z * z / n)) * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+    lo, hi = max(0.0, centre - half), min(1.0, centre + half)
+
+    print(f"\n  audit {stamp}")
+    print(f"  {n} culls judged, drawn at random from the plan")
+    print(f"  {wrong} of them wrong \u00b7 {p * 100:.0f}%")
+    print(f"  the true rate is between {lo * 100:.0f}% and {hi * 100:.0f}%, "
+          f"nineteen times in twenty")
+    if wrong:
+        print("\n  the ones you marked different:")
+        for sheet, _ in sorted((c for c in culls if c[1] == "different")):
+            r = answers[sheet]
+            print(f"    {sheet}  scored {float(r['score']):.1f} against "
+                  f"{float(r['limit']):.0f}")
+            print(f"        kept {os.path.basename(r['kept'])}")
+            print(f"        lost {os.path.basename(r['other'])}")
 
 
 def analyse(folder, opts):
@@ -1252,6 +1342,12 @@ def reclaimed_total():
 def main():
     ap = argparse.ArgumentParser(description="Find redundant photos and move them out. Nothing is deleted.")
     ap.add_argument("folder", nargs="?")
+    ap.add_argument("--audit", nargs="?", type=int, const=30, default=None,
+                    metavar="N",
+                    help="judge N culls drawn at random from the plan, blind, "
+                         "for an honest error rate (default 30)")
+    ap.add_argument("--audit-result", action="store_true",
+                    help="read a sorted audit and report the error rate")
     ap.add_argument("--reset", action="store_true",
                     help="undo every applied job and clear caches, proof images "
                          "and plans; judgements are kept")
@@ -1275,6 +1371,12 @@ def main():
     ap.add_argument("--verbose", action="store_true",
                     help="full diagnostics: thresholds, bands, verification stats")
     a = ap.parse_args()
+
+    if a.audit_result:
+        if WORKING_DIR is None:
+            sys.exit("no working folder set yet")
+        audit_result()
+        return
 
     if a.reset:
         if WORKING_DIR is None:
@@ -1404,10 +1506,16 @@ def main():
         return
 
     interactive = sys.stdin.isatty() and not a.no_prompt
-    opts["no_summary"] = interactive and not a.hunt
+    opts["no_summary"] = interactive and not (a.hunt or a.audit)
     session = analyse(folder, opts)
     if a.hunt:
         hunt(folder, opts, session, a.hunt)
+        return
+
+    if a.audit:
+        # An audit judges a plan, so it audits the setting the analysis ran at.
+        # An error rate for a setting nobody would apply says nothing.
+        hunt(folder, opts, session, a.audit, uniform=True)
         return
     dial = interactive and session is not None
     n, total_pairs, kinds, n_mech = spot_checks(

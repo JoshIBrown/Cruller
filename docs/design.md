@@ -258,6 +258,20 @@ changing expression just as well as it describes a brightness edit — measured
 on labelled pairs, crop signatures on frames merely seconds apart are a
 coin flip between a real crop and an optical zoom.
 
+## Knowing how often it is wrong
+
+The review shows the biggest differences first, which is the right order to
+read but the wrong sample to count. Reviewing more of it describes the pairs
+already thought marginal; it says nothing about the rest, and a reviewer's
+disagreement rate measured across such a list came out flat — 13%, 10%, 13% by
+third — so the ordering carries no information about where mistakes are.
+
+So the error rate comes from a separate draw: photographs taken uniformly at
+random from the culls a setting would make, judged blind, with the answer key
+held back until afterwards. Thirty gives a range about ten points wide, a
+hundred about six. Anything else — including "the reviewer approved these
+sheets" — is a number about the sample rather than about the plan.
+
 ## Safety
 
 - **Nothing is ever deleted.** Redundant files are moved to a holding folder

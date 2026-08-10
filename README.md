@@ -10,6 +10,8 @@ frame to keep, and moves the rest to a holding folder with a log.
 ./crull "/path/to/some/photos" --apply  # move the redundant files out
 ./crull --undo "<job name>"             # put them all back
 ./crull --reset                        # undo everything, clear every cache
+./crull "/folder" --audit              # judge 30 culls at random, blind
+./crull --audit-result                 # what the tool's error rate actually is
 ```
 
 macOS users can drag a folder onto `Cruller.app` instead.

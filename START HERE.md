@@ -299,6 +299,29 @@ Worth doing after the tool changes how it decides, or any time you want to be
 sure a run's answer came from the photographs rather than from something
 remembered.
 
+## Finding out how often it is wrong
+
+    ./crull "/some/folder" --audit
+
+Draws thirty culls at random from what the run would move and writes them as
+numbered sheets — both frames whole, and underneath, the exact spot they differ
+most, cropped from the originals at full size. The sheets carry a number and
+nothing else, and the answer key goes to Records, so nothing tells you what the
+tool decided before you have looked.
+
+Sort each sheet into `same/` or `different/`. Same means you cannot tell them
+apart and the cull was fair; different means it was wrong. Then:
+
+    ./crull --audit-result
+
+which reports how many were wrong and the range the true rate lies in.
+
+**Why at random, and why blind.** The review shows the biggest differences
+first, so reviewing more of it tells you about the pairs the tool already
+thinks are marginal, not about the rest. Only an even draw from the whole plan
+answers "of the photographs this would move, how many should not be". Thirty
+gives a range about ten points wide, a hundred about six.
+
 ## What it will not do
 
 - Delete anything. Ever. Emptying `Culled Photos` is your decision

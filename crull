@@ -7,6 +7,8 @@
 #   ./crull --undo "<job name>"         put everything a job moved back
 #   ./crull --reset                     undo every job, clear every cache
 #   ./crull --dashboard                 refresh the one-page summary
+#   ./crull "/path/to/folder" --audit   judge 30 culls at random for an error rate
+#   ./crull --audit-result              read the sorted audit and report the rate
 #   ./crull "/path/to/folder" --hunt    audit one run's culls; changes nothing
 #   ./crull --queue                     work through folders dropped on Cruller.app
 #

@@ -3,20 +3,6 @@
 Known gaps and unfinished work, in rough order of how much they matter. Things
 that were tried and rejected are in [dead-ends.md](dead-ends.md) instead.
 
-## An honest error rate
-
-Every accuracy figure the tool can currently quote comes from pairs it chose to
-show for review — sorted worst-first, and a small fraction of any plan. That is
-the one sample which cannot estimate its own error rate.
-
-The fix is a uniform random draw from a run's plan, with no sorting, judged
-blind. Thirty pairs gives about ±10 percentage points, a hundred gives ±6.
-Until that exists, "the tool is right about X% of culls" is unsupported.
-
-Reviewing more of the worst-first list does not substitute for it: across the
-range one reviewer covered, their disagreement rate was flat — 13%, 10%, 13% by
-third — so the ranking carries no information about where disagreements are.
-
 ## A burst frame where anything moved cannot be culled gently
 
 A pair is scored on its worst block of about thirty thousand, so one region
