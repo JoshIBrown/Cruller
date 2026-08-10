@@ -294,7 +294,12 @@ def outcomes(session, manifest):
     seen = {}
 
     def at(limit):
-        """Weigh one setting: what it would cull, and how much of that is judged."""
+        """Weigh one setting: what it would cull, and how much of that is judged.
+
+        The dial has ends and interpolation does not respect them, so a
+        correction aiming past the top is brought back to it.
+        """
+        limit = min(TOLERANCE_CEILING, max(TOLERANCE_FLOOR, limit))
         key = round(limit, 4)
         if key not in seen:
             with contextlib.redirect_stdout(io.StringIO()):
@@ -334,35 +339,49 @@ def outcomes(session, manifest):
         # each new setting midway between two already weighed is blind to where
         # culls actually appear, and on a folder whose culls cluster high it
         # offered nothing at all between "none" and "a pair 60% different".
+        # The two ends are always offered, and always first and last: nothing
+        # may differ at all, and anything that aligns may go. Between them the
+        # dial is a judgement; at the ends it is not, so they are the two
+        # settings somebody reaches for when they want to be sure either way.
+        at(TOLERANCE_FLOOR)
         top = at(TOLERANCE_CEILING)
+
+        # The middle is read out of the pairs. Every pair the tool would ever
+        # cull is in the most thorough setting's plan, and each one's own
+        # numbers say the lowest setting at which it qualifies — so the
+        # settings worth offering can be read rather than searched for.
         wanted = sorted(filter(None, (needed_by(r) for r in top["rows"]
                                       if r["why"] not in MECHANICAL)))
 
-        # Spread the offers across those pairs, so each step admits a similar
-        # number more. The first is the gentlest setting that shows anything at
-        # all — the one somebody nervous about this reaches for — and every
-        # offer has something to look at, because a setting whose culls are all
-        # settled by rule gives nothing to judge and so is not a choice.
-        def offers():
-            """How many settings so far are worth offering."""
-            return len({seen[k]["redundant"] for k in seen if seen[k]["judged"]})
-
         n = len(wanted)
-        spread = [round(k * (n - 1) / max(1, MAX_OPTIONS - 1))
-                  for k in range(MAX_OPTIONS)] if n else []
-        for i in spread:
-            at(wanted[i])
+        middle = MAX_OPTIONS - 2
+        if n:
+            for k in range(middle):
+                at(wanted[round((k + 1) * (n - 1) / (middle + 1))])
 
-        # Two of those can admit the same number and collapse into one choice.
-        # Walk the rest until the list is full, so a folder always offers the
-        # same number of ways to answer it. Budgeted, because every setting
-        # weighed is a full re-decide.
-        budget = MAX_OPTIONS * 2
-        for i in range(n):
-            if offers() >= MAX_OPTIONS or len(seen) >= budget:
-                break
-            if i not in spread:
-                at(wanted[i])
+        # Those are guesses, and they land unevenly: a pair qualifying is not
+        # the same as a photograph being culled, because raising the limit
+        # merges groups and a merge can carry several files at once. So the
+        # guesses are corrected against what they actually culled.
+        #
+        # The steps should be even in the number of photographs culled, since
+        # that is the quantity being chosen between.
+        low = seen[round(TOLERANCE_FLOOR, 4)]["redundant"]
+        high = seen[round(TOLERANCE_CEILING, 4)]["redundant"]
+        for k in range(middle):
+            if len(seen) >= MAX_OPTIONS * 2:
+                break                         # each correction is a re-decide
+            target = low + (k + 1) * (high - low) / (middle + 1)
+            known = sorted((seen[key]["limit"], seen[key]["redundant"])
+                           for key in seen)
+            below = [p for p in known if p[1] <= target]
+            above = [p for p in known if p[1] >= target]
+            if not below or not above:
+                continue
+            (l0, c0), (l1, c1) = below[-1], above[0]
+            if c1 == c0 or l1 <= l0:
+                continue                      # already on it, or nothing between
+            at(l0 + (l1 - l0) * (target - c0) / (c1 - c0))
     except KeyboardInterrupt:
         pass                                  # keep whatever has been found
     finally:
@@ -370,19 +389,31 @@ def outcomes(session, manifest):
         sift.progress._only = None            # the stages after this show again
         sift.progress._relay = None
 
-    # Every offer must have something to look at. A setting whose culls are all
-    # settled by rule shows nothing, and two settings culling the same number
-    # are one choice written twice.
-    found = []
-    for key in sorted(seen):
-        r = seen[key]
-        if r["judged"] and (not found or r["redundant"] != found[-1][1]):
-            found.append((r["limit"], r["redundant"], r["freed"], r["judged"]))
-    if len(found) > MAX_OPTIONS:
-        keep = sorted({round(i * (len(found) - 1) / (MAX_OPTIONS - 1))
-                       for i in range(MAX_OPTIONS)})
-        found = [found[i] for i in keep]
-    return found
+    # The ends are kept whatever they cull — at difference 0 a folder holding
+    # no provable copies culls nothing, and saying so is worth a line. In
+    # between, two settings culling the same number are one choice written
+    # twice.
+    # More settings were weighed than are shown, because the corrections above
+    # each cost one. The list keeps both ends and, between them, the three
+    # whose cull counts sit closest to evenly spaced — which is the spacing
+    # somebody is choosing along.
+    weighed = sorted((seen[k]["limit"], seen[k]["redundant"], seen[k]["freed"],
+                      seen[k]["judged"]) for k in seen)
+    if not weighed:
+        return []
+    ends = [weighed[0], weighed[-1]]
+    inner = [w for w in weighed[1:-1] if w[1] != weighed[0][1]
+             and w[1] != weighed[-1][1]]
+    picks = []
+    steps = MAX_OPTIONS - 2
+    low, high = weighed[0][1], weighed[-1][1]
+    for k in range(steps):
+        target = low + (k + 1) * (high - low) / (steps + 1)
+        left = [w for w in inner if w not in picks]
+        if not left:
+            break
+        picks.append(min(left, key=lambda w: abs(w[1] - target)))
+    return sorted(ends[:1] + picks + ends[1:])
 
 
 def show_outcomes(found, n_files, at):

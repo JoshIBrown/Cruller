@@ -194,21 +194,22 @@ end — the difference between 2 and 3 matters, the difference between 70 and 80
 rarely does. So the tool lays a ladder across the range, close together at the
 bottom and spreading towards the top.
 
-The most thorough setting is weighed first. Its plan holds every pair the tool
-would ever cull, and each pair's own numbers say the lowest setting at which it
-would qualify — so the settings worth offering are read out of the pairs rather
-than searched for.
+**The ends are fixed.** The first setting is a difference of nothing at all and
+the last is anything that aligns, because at the ends the dial stops being a
+judgement: one keeps everything the tool cannot prove, the other keeps nothing
+it can group. Those are the two settings somebody reaches for when they want to
+be sure in either direction.
 
-That matters because searching for them is blind to where culls actually
-appear. Placing each new setting midway between two already weighed can skip
-the entire gentle end of the range, offering nothing between "nothing to
-review" and a pair that differs by more than half.
+**The three between are spaced by how many photographs they cull**, since that
+is the quantity being chosen along. They are first guessed from the pairs — the
+most thorough setting's plan holds every pair the tool would ever cull, and
+each pair's own numbers say the lowest setting at which it qualifies — and then
+corrected against what they actually culled, because a pair qualifying is not
+the same as a photograph being culled: raising the limit merges groups, and one
+merge can carry several files at once.
 
-Every offer has something to look at, and the first is the gentlest setting
-that shows anything at all. A setting whose culls are all settled by rule gives
-nothing to judge and so is not a choice; two settings admitting the same number
-are one choice written twice. The list is filled until it holds five, so a
-folder always offers the same number of ways to answer it.
+A folder always offers five, whatever it holds. A folder with no provable
+copies in it culls nothing at the first setting, and saying so is worth a line.
 
 That matters because weighing a setting is not cheap. Each one walks the whole
 candidate set again — about ten seconds on a folder of a thousand photographs —
