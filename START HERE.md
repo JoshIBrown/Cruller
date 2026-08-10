@@ -58,26 +58,26 @@ for raws, faster for JPEGs. Comparing uses every core you have.
 **2. Review**, by opening that Spot Checks folder in Finder and arrowing
 through. Keeper on the left, the file it wants to move on the right.
 
-**You are shown the biggest differences first, and only so many.** Two rules
-decide what reaches you:
+**Every photograph it would move gets a pair**, keeper on the left, both
+frames at the same size so a difference on screen is a difference in the
+photograph. A group of six shows five pairs, because five photographs are
+leaving and each is its own decision — and that includes the ones the tool can
+prove are copies, since a proof you have never looked at is only a claim.
 
-1. **One pair per group — the member least like the keeper**, keeper on the
-   left, both frames at the same size so a difference on screen is a difference
-   in the photograph. If that pair is a fair cull then every other member of
-   its group is closer to the keeper still, so one pair settles the group.
-2. **Ordered by how different the two photographs actually are**, capped at 120
-   so the list stays reviewable in one sitting. Work down it and stop when it
-   stops being interesting — what remains below is more similar, not less
-   examined.
+**Ordered by how different the two photographs actually are**, most different
+first. Work down and stop when it stops being interesting: what remains below
+is more alike, not less examined. A pair whose difference could not be measured
+comes first of all, because not knowing is the least confident state there
+is.
 
 **One menu, and you drive.** Before asking anything, the tool works out which
 settings give genuinely different answers, and offers those:
 
-        1   cull 48 of 200    24.0% of the folder    27 MB   12 to review
-        2   cull 50 of 200    25.0% of the folder    33 MB   19 to review
-        3   cull 51 of 200    25.5% of the folder   104 MB   24 to review
-        4   cull 54 of 200    27.0% of the folder   287 MB   38 to review
-        5   cull 60 of 200    30.0% of the folder   612 MB   57 to review
+        1   cull 48 of 200    24.0% of the folder    27 MB
+        2   cull 50 of 200    25.0% of the folder    33 MB
+        3   cull 51 of 200    25.5% of the folder   104 MB
+        4   cull 54 of 200    27.0% of the folder   287 MB
+        5   cull 60 of 200    30.0% of the folder   612 MB
       [1-5] review  ·  [q]uit
 
 One keypress, no Enter. **Nothing is rendered until you ask for it.** Press a
@@ -254,12 +254,12 @@ finishes.
       reading photos    [############--------------------]  38%  1,900/5,000   1m20s left
       comparing photos  [################################] 100%  145/145      2m04s
       working out options   4s
-      1   cull 18 of 145   12.4% of the folder   0.7 GB    6 to review
-      2   cull 23 of 145   15.9% of the folder   0.9 GB    8 to review
-      3   cull 31 of 145   21.4% of the folder   1.4 GB   14 to review
+      1   cull 18 of 145   12.4% of the folder   0.7 GB
+      2   cull 23 of 145   15.9% of the folder   0.9 GB
+      3   cull 31 of 145   21.4% of the folder   1.4 GB
       [1-3] review  ·  [q]uit
       > 2
-      proof: 8 to review, 2 automatic · biggest difference first
+      23 proof images · most different first
       [1-3] review  ·  [a]pply  ·  [q]uit
       done · 23 moved · 0.9 GB · Photo Bin holds 12.4 GB
 

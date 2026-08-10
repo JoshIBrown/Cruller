@@ -43,9 +43,18 @@ about 69% of them.
 
 ## Reviewing before you commit
 
-An analysis run writes proof images — keeper beside each frame it wants to
-replace, biggest difference first — and offers every distinct outcome the dial
-can produce, so you pick a cull count rather than guess at a threshold.
+An analysis run writes a proof image for **every photograph it would move** —
+the frame that replaces it, side by side, at the same size — including the
+culls it can prove. A relationship the tool is certain about is still a
+photograph leaving.
+
+They are ordered by how different the two frames are, most different first, so
+the least confident call is the first thing seen. A pair whose difference could
+not be measured leads the whole review, because not knowing is the least
+confident state there is.
+
+You are offered five settings, each with something to look at, and pick a cull
+count rather than guessing at a threshold.
 
 ## Installing
 
