@@ -328,11 +328,24 @@ def outcomes(session, manifest):
                 best, gap = (lo, hi), here
         return best
 
+    def offerable():
+        """Settings worth showing: they cull something, and something different.
+
+        A setting that culls nothing is not a choice, and two that cull the
+        same number are one choice written twice.
+        """
+        counts = [seen[i]["redundant"] for i in sorted(seen)]
+        return len({n for n in counts if n})
+
     at(0)
     draw()
     at(span)
     try:
-        for _ in range(MAX_OPTIONS - 2):
+        # Keep placing until there are enough worth offering, not merely enough
+        # weighed. The most conservative setting often culls nothing at all,
+        # and a folder can answer the same at two settings — either way a
+        # placement is spent without earning an option.
+        while offerable() < MAX_OPTIONS:
             pair = widest_gap()
             if pair is None:
                 break                         # every setting between is weighed

@@ -195,10 +195,15 @@ end — the difference between 2 and 3 matters, the difference between 70 and 80
 rarely does. So the tool lays a ladder across the range, close together at the
 bottom and spreading towards the top.
 
-It weighs five of those rungs, and no more. Two are given rather than found:
-the most conservative setting and the most thorough are always worth offering.
-Each of the remaining three is placed in the widest gap between the cull counts
-already known, which is where another option is worth the most.
+Two settings are given rather than found: the most conservative and the most
+thorough. Each further one is placed in the widest gap between the cull counts
+already known, which is where another option is worth the most, and placing
+continues until there are enough worth offering.
+
+Worth offering is doing work there. A setting that culls nothing is not a
+choice, and two that cull the same number are one choice written twice — so on
+a folder holding no provable copies at all, where the most conservative setting
+culls zero, a further setting is placed rather than the list coming up short.
 
 That matters because weighing a setting is not cheap. Each one walks the whole
 candidate set again — about ten seconds on a folder of a thousand photographs —
