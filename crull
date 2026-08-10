@@ -64,6 +64,14 @@ case "${1:-}" in
           items=("$Q"/*.path "$Q"/*.paths)
           (( ${#items[@]} == 0 )) && break
           ticket="${items[0]}"
+          # A folder with nothing to decide holds the run so its account can be
+          # read. With more waiting behind it, the next one draws over it
+          # anyway, and holding would cost a keypress per folder.
+          if (( ${#items[@]} > 1 )); then
+              export CRULLER_MORE_QUEUED=1
+          else
+              unset CRULLER_MORE_QUEUED
+          fi
           case "$ticket" in
             *.paths)
                 # A dropped selection of files, one path per line. The ticket

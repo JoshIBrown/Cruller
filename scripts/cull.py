@@ -179,11 +179,16 @@ def size_text(nbytes):
 def wait_to_close(message):
     """Say what happened, then hold the window until the person is finished.
 
-    A folder with nothing in it must still wait, because since
-    the window began closing itself meant a drop could flash and vanish with
-    no account of what happened. Nothing closes unannounced now.
+    A folder with nothing to decide would otherwise flash past and vanish,
+    taking its account of what happened with it.
+
+    Unless more folders are queued behind it: then nothing is vanishing, the
+    next one is about to draw over it, and waiting is one keypress per folder
+    for no reason.
     """
     print(f"  {message}")
+    if os.environ.get("CRULLER_MORE_QUEUED"):
+        return
     print("  [q]uit")
     while True:
         try:
@@ -386,30 +391,26 @@ def show_outcomes(found, n_files, at):
               f"   {size_text(freed):>7}   {seen}{mark}")
 
 
-def ask_next(found, n_files, at, applied, size):
-    """The menu: show an outcome, apply the one showing, or leave.
+def ask_next(found, n_files, at, size):
+    """The menu: review an outcome, apply the one reviewed, or leave.
 
     Applying is offered only once an outcome has actually been looked at.
     Before that there is nothing on screen to have judged, and the plan still
     sits at whatever limit the analysis happened to use.
 
-    One keypress, no Enter. After a cull the list is put away — undo brings it
-    back, so nothing is a dead end.
+    One keypress, no Enter. Applying finishes the folder — nothing waits
+    afterwards, because a queue of them would then wait once each, and undo
+    costs one gesture whenever it is wanted.
     """
-    if applied:
-        print(f"  {n_files:,} moved \u00b7 {size_text(size)}")
-        print("  [u]ndo  [q]uit")
-        keys = {"u": "undo", "q": "quit"}
-    else:
-        show_outcomes(found, n_files, at)
-        keys = {str(i): f"pick{i}" for i in range(1, len(found) + 1)}
-        keys["q"] = "quit"
-        offer = [f"[1-{len(found)}] review" if len(found) > 1 else "[1] review"]
-        if at is not None:
-            keys["a"] = "apply"
-            offer.append("[a]pply")
-        offer.append("[q]uit")
-        print("  " + "  \u00b7  ".join(offer))
+    show_outcomes(found, n_files, at)
+    keys = {str(i): f"pick{i}" for i in range(1, len(found) + 1)}
+    keys["q"] = "quit"
+    offer = [f"[1-{len(found)}] review" if len(found) > 1 else "[1] review"]
+    if at is not None:
+        keys["a"] = "apply"
+        offer.append("[a]pply")
+    offer.append("[q]uit")
+    print("  " + "  \u00b7  ".join(offer))
     while True:
         try:
             pick = read_key()
@@ -1064,47 +1065,6 @@ def reset(no_prompt=False):
           f"judgements kept")
 
 
-def rewind(job):
-    """Put a job's files back so the next round starts from a clean folder.
-
-    Used between rounds of the review loop, when the limit has just changed and
-    the plan is about to be re-applied. Every round re-applies from scratch
-    rather than trying to work out a delta: it is a rename per file on the same
-    volume, and "the folder is exactly what the current plan says" is an
-    invariant worth more than the saved I/O.
-
-    Distinct from `undo`, deliberately. An undo is a person retracting a cull,
-    so it retracts the approval too. This is one step of a decision still being
-    made, and the labels belong to whatever the person finally settles on.
-
-    The log is kept, numbered, never overwritten: what moved where stays on
-    record even for rounds that were superseded seconds later.
-    """
-    log = os.path.join(DEFAULT_RECORDS, f"{job} - log.csv")
-    if not os.path.exists(log):
-        return 0
-    rows = list(csv.DictReader(open(log)))
-    back = 0
-    for n, r in enumerate(rows, 1):
-        progress(n, len(rows), "putting back")
-        src, dst = r["to"], r["from"]
-        if not os.path.exists(src) or os.path.exists(dst):
-            continue
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        try:
-            os.rename(src, dst)
-        except OSError:
-            shutil.move(src, dst)
-        back += 1
-    k = 1
-    while os.path.exists(os.path.join(DEFAULT_RECORDS,
-                                      f"{job} - log (round {k}).csv")):
-        k += 1
-    os.rename(log, os.path.join(DEFAULT_RECORDS, f"{job} - log (round {k}).csv"))
-    prune_empty(os.path.join(DEFAULT_CULL, job))
-    return back
-
-
 def prune_empty(dest):
     """Leave no empty scaffolding behind in Culled Photos.
 
@@ -1450,7 +1410,6 @@ def main():
             session["result"] = session["regroup"](*limits_at(found[i - 1][0]))
             return spot_checks(folder, opts["manifest"], opts["checkdir"], a.checks)
 
-        applied = False
         rebuilt = False
         while True:
             if rebuilt:
@@ -1464,16 +1423,15 @@ def main():
             red = [r for r in csv.DictReader(open(opts["manifest"]))
                    if r["verdict"] == "REDUNDANT"]
             size = sum(float(r["MB"] or 0) for r in red) * 1e6
-            choice = ask_next(found, session["files"], at, applied, size)
+            choice = ask_next(found, session["files"], at, size)
 
             if choice == "quit":
-                if not applied:
-                    if at is None:
-                        # Leaving without picking: the plan on disk is whatever
-                        # the analysis used, which is not a setting anyone chose.
-                        print("  no setting chosen \u00b7 nothing moved")
-                    else:
-                        print(f'  kept \u00b7 {apply_hint}')
+                if at is None:
+                    # Leaving without picking: the plan on disk is whatever the
+                    # analysis used, which is not a setting anyone chose.
+                    print("  no setting chosen \u00b7 nothing moved")
+                else:
+                    print(f'  kept \u00b7 {apply_hint}')
                 break
 
             if choice == "apply":
@@ -1485,17 +1443,10 @@ def main():
                 print(f"  done \u00b7 {moved:,} moved \u00b7 {size_text(freed)} \u00b7 "
                       f"{os.path.basename(WORKING_DIR)} holds "
               f"{reclaimed_total():.1f} GB{extra}")
-                applied = True
-                continue
+                print(f'  to change your mind: --undo "{job}", or drop '
+                      f'that folder from Culled Photos on the app')
+                break
 
-            # Undo and every move start alike: the photographs come back. They
-            # are a rename away, so changing your mind costs no rescan.
-            if applied:
-                rewind(job)
-                refresh_dashboard()
-                applied = False
-            if choice == "undo":
-                continue
             at = int(choice[4:])
             n, total_pairs, kinds, n_mech = settle(at)
             rebuilt = True

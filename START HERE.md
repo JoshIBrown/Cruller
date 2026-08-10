@@ -85,6 +85,11 @@ number and that outcome is built — proof images made, Finder opened — and on
 then does `a` appear, to apply the one you are looking at. Nothing can be
 applied that you have not seen.
 
+Applying finishes the folder. Drop several at once and it moves straight to the
+next rather than asking to be let past each one. Changing your mind afterwards
+is one gesture: drop the job's folder from `Culled Photos` back on the app, or
+name it to `--undo`.
+
 Settings that give the same answer are never offered twice, so there is
 nothing in between to hunt for.
 
