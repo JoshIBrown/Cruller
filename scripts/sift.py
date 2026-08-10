@@ -659,16 +659,15 @@ def classify(keeper, other, v=None, dt=None):
     kp = keeper['w'] * keeper['h']; op = other['w'] * other['h']
     # Everything below asserts one thing: `other` was made from `keeper`, and
     # `keeper` is still here. The names say how, which is for the record; the
-    # decision is the same in every case, and so is the price of getting it
-    # wrong, because these are culled without ever being shown.
+    # decision is the same in every case; the names differ only in what
+    # evidence backs them.
     #
-    # Three of them prove derivation on their own — a containment warp, a
-    # quarter turn, an identical frame with the tone moved. Three do not: being
-    # a raw beside a JPEG, holding fewer pixels, or carrying a coarser
-    # quantization table are facts about two files, not about a relationship
-    # between them. Those must show the pictures agree before they may skip
-    # review; without that they fall through to a judged near-duplicate and are
-    # put in front of somebody.
+    # Three prove derivation on their own — a containment warp, a quarter turn,
+    # an identical frame with the tone moved. Three do not: being a raw beside
+    # a JPEG, holding fewer pixels, or carrying a coarser quantization table
+    # are facts about two files, not about a relationship between them. Those
+    # must show the pictures agree before they may claim lineage; without that
+    # they fall through to a plain near-duplicate.
     if keeper['raw'] and not other['raw'] and structure_agrees(keeper, other):
         return "export of raw"
     kind = derivative_kind(v, dt)
@@ -1126,10 +1125,10 @@ def main(argv=None):
         # overlap, so frame movement does not stand in for the picture
         # changing. Shift and zoom are still recorded in the plan.
         if v["scene"] == "unknown":
-            # Too dark or too smooth for geometry — a bird against blank sky, a
-            # museum wall. No warp, so no honest high-resolution residual, and
-            # the sketch is all there is. It does not get to say yes on its own
-            # Darkness compresses exactly the differences that matter.
+            # Too dark or too smooth for geometry — a bird against blank sky,
+            # a museum wall. No warp, so no honest high-resolution residual,
+            # and the sketch is all there is. It does not get to say yes on its
+            # own: darkness compresses exactly the differences that matter.
             stats_v["unverifiable, kept apart"] += 1
             _audit_note(keeper, other, "keypoint floor", f"kp={v['keypoints']}")
             return False
