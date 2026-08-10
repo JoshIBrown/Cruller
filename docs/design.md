@@ -180,10 +180,9 @@ meant a bird in a landscape was silently judged by the loose limit, and the
 whole mechanism was invisible: nothing in the interface showed which limit a
 pair had been given. Curating the folder does the same job and can be seen.
 
-Rather than asking you to guess a number, a run works out every distinct
-outcome the dial can produce and offers about five of them as a list: how many
-photographs each setting culls, what share of the folder that is, how much
-space it frees, and how many pairs it would give you to review.
+Rather than asking you to guess a number, a run offers five settings as a
+list: how many photographs each would cull, what share of the folder that is,
+and how much space it frees. Every one of them has something to look at.
 
 **The list comes first and nothing is rendered until you choose.** Proof
 images are built only for the outcome you choose to review, and only then can that
@@ -236,18 +235,20 @@ The provable relationship *is* the answer: a crop or a tonal edit is grouped
 regardless of how large its measured difference is, because the edit is exactly
 what makes the difference large, and the edit is what should go.
 
-**A reason may skip review only if it proves derivation.** Three do so on their
+**A label may claim derivation only if it proves it.** Three do so on their
 own — a containment warp, a quarter turn, an untouched geometry with the tone
 moved. Three do not: being a raw beside a JPEG, holding fewer pixels, or
 carrying a coarser quantization table are facts about two files, not about a
 relationship between them. Those must also show the two pictures agree, by
 comparing their sketches with brightness and contrast removed, so the question
 asked is "the same picture?" and not "the same tone?". A pair that cannot show
-it falls through to a judged near-duplicate and is put in front of somebody.
+it is a near-duplicate, and is labelled one.
 
-Audited across four folders, that requirement changes no cull at all. It moves
-about 3% of them from settled to reviewed — which is exactly the population
-whose evidence never supported settling them.
+Audited across four folders, the requirement changes no cull. It relabels about
+3% of them — exactly the population whose evidence never supported the stronger
+claim. Every cull is shown either way, so what this protects is the record: a
+label is a statement about a relationship, and one that cannot be backed is
+worth less than the plain answer.
 
 The time window matters and is not the same for both. A crop or rotation is
 accepted within 2 seconds. A tonal signature demands the same capture instant,
