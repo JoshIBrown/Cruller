@@ -239,10 +239,10 @@ in a single window. Drop more while it's running and they join the end.
 
 **Dropping loose files works too** — select any photos in Finder and drop the
 selection on the app. They are judged together as one set, named `<date> -
-<their folder> selection` in the records. One difference from a folder run: a
-selection is applied by answering `y` during its own run — to look again
-later, just drop the same files again. Anything dropped that isn't a photo is
-skipped with a note.
+<their folder> selection` in the records. One difference from a folder run:
+`--apply` cannot be pointed at a selection afterwards, so it is applied from
+its own review page — to look again later, drop the same files again. Anything
+dropped that isn't a photo is skipped with a note.
 
 **Dropping when nothing is running always starts fresh.** Tickets left behind
 by an interrupted session are discarded; only what you just dropped runs.
@@ -251,9 +251,8 @@ by an interrupted session are discarded; only what you just dropped runs.
 "Changed your mind?" above. The tool will not cull its own output.
 
 **Rebuilds are rarely needed.** The app runs the live scripts, so code changes
-reach it immediately; only a change to the drop-handling inside `mac_install.command`
-needs `./mac_install.command` re-run. You also get a macOS notification when a run
-finishes.
+reach it immediately; only a change to the drop-handling inside
+`mac_install.command` needs `./mac_install.command` re-run.
 
 ## What a run looks like
 

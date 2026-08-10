@@ -49,11 +49,11 @@ sideways.
 
 ## Consolidation
 
-The tool is five Python files that import each other. For something meant to be
+The tool is six Python files that import each other. For something meant to be
 downloaded and run by anyone, one file would be better.
 
 ## A run report
 
-Proof images answer "was this cull right". Nothing yet answers "what did this
-run do" in one page — space reclaimed, what was grouped and why, keeper beside
-each replaced frame.
+The review answers "is this cull right" while there is still time to say no.
+Nothing yet answers "what did this run do" afterwards, in one page: space
+reclaimed, what was grouped and why, and what was refused.

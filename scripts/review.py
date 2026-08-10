@@ -1,15 +1,13 @@
-"""The review page: every cull, side by side, with the decision in your hands.
+"""The review page: every cull, side by side, answered one at a time.
 
-Proof images in a folder can only be looked at. Judging them means agreeing or
-disagreeing with the whole plan at once, and a disagreement about one pair has
-nowhere to go.
+Kept on the left, going on the right, and under each pair a way to say *no, not
+that one* with a reason, or *you have these the wrong way round*. Answering
+each cull separately is the point: a verdict on the whole plan at once leaves a
+disagreement about one pair nowhere to go.
 
-This shows the same pairs in a page where each one can be answered on its own:
-kept on the left, going on the right, and for each a way to say *no, not that
-one* with a reason, or *you have these the wrong way round*. Both buttons at the
-bottom close the page and record every judgement — applying acts on them, and
-quitting keeps them anyway, because a judgement is worth having whether or not
-anything moved.
+`blind=True` asks the opposite question for the audit — same photographs, but
+no labels, no filenames, and the sides swapped by a coin, so the page cannot
+hint at which frame the tool chose.
 
 It runs on a local address, serving only the folder being judged, and stops the
 moment the page answers.
@@ -19,7 +17,6 @@ import json
 import os
 import socket
 import threading
-import urllib.parse
 import webbrowser
 
 from loaders import open_image
@@ -28,7 +25,7 @@ THUMB_LONG = 1100          # generous: the point is to see whether it is a dupli
 
 
 def _thumbs(pairs, out_dir):
-    """One image per file, once, whatever how many pairs mention it."""
+    """One image per file, however many pairs name it."""
     made = {}
     os.makedirs(out_dir, exist_ok=True)
     for pair in pairs:

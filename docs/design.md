@@ -208,8 +208,11 @@ corrected against what they actually culled, because a pair qualifying is not
 the same as a photograph being culled: raising the limit merges groups, and one
 merge can carry several files at once.
 
-A folder always offers five, whatever it holds. A folder with no provable
-copies in it culls nothing at the first setting, and saying so is worth a line.
+Both ends are always offered, so five is the usual list. A folder with no
+provable copies culls nothing at the first setting, and saying so is worth a
+line. Fewer than five means the folder genuinely has fewer answers — a folder
+of nothing but exact copies culls the same set at every setting, and repeating
+one answer five times would be a list that lies about having a choice in it.
 
 That matters because weighing a setting is not cheap. Each one walks the whole
 candidate set again — about ten seconds on a folder of a thousand photographs —

@@ -29,9 +29,15 @@ cheap ones only ever say *no*:
    the long edge. Warping absorbs camera movement, so what is left is the
    *scene* changing rather than the photographer.
 
-A pair is a duplicate when that residual sits under one limit, which you move on
-a dial from 0 to 100. There is no second limit and no subject detector — the
+A pair is a duplicate when that residual sits under one limit, which you move
+on a dial from 0 to 100. There is no second limit and no subject detector — the
 person choosing what goes in a folder sets its standard.
+
+The dial governs pairs that are *judged*. A pair that can be **proved** derived
+— one frame's warp landing inside the other, a quarter turn, or identical
+geometry with the tone moved — is grouped whatever it measures, because the
+edit is exactly what makes the difference large. So even at 0 the tool culls
+provable copies, and no setting spares them.
 
 Candidates come from two pools, unioned: photographs that **look alike**
 (a 144-number brightness sketch) and photographs **close in time** (bursts
@@ -44,8 +50,8 @@ about 69% of them.
 
 ## Reviewing before you commit
 
-You are offered five settings and pick a cull count rather than guessing at a
-threshold. Choosing one opens a page in your browser showing **every photograph
+You are offered the settings the dial can actually produce — usually five —
+and pick a cull count rather than guessing at a threshold. Choosing one opens a page in your browser showing **every photograph
 it would move** — the frame that replaces it on the left, the one leaving on
 the right, at the same size. Nothing is certain enough to skip: a relationship
 the tool has no doubt about is still a photograph leaving.

@@ -1,14 +1,15 @@
 #!/bin/bash
 #
-# install.sh — everything Cruller needs, in one command.
+# mac_install.command — everything Cruller needs, in one command.
 #
-#   ./install.sh
+#   ./mac_install.command
 #
 # 1. Installs the Python libraries (numpy, pillow, opencv, pillow-heif).
 # 2. Builds Cruller.app, the Finder drop target.
 #
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+PY="${PYTHON:-python3}"
 
 # Transports like Dropbox and email strip the execute bit. This script may
 # have been started with `bash mac_install.command`, so heal everything here.
@@ -37,7 +38,7 @@ on ensureWorkingFolder()
 	set conf to toolDir & "/scripts/settings.conf"
 	set hasIt to (do shell script "grep -qs '^[[:space:]]*working folder' " & quoted form of conf & " && echo yes || echo no")
 	if hasIt is "no" then
-		set wf to choose folder with prompt "First, choose Cruller's working folder — it will hold culled photos, proof images and records. Never your photo library itself. (You can create a new folder right here.)"
+		set wf to choose folder with prompt "First, choose Cruller's working folder — it will hold culled photos, reviews and records. Never your photo library itself. (You can create a new folder right here.)"
 		do shell script "p=" & quoted form of (POSIX path of wf) & " ; printf 'working folder = %s\n' \"${p%/}\" >> " & quoted form of conf
 	end if
 end ensureWorkingFolder

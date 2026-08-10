@@ -637,12 +637,11 @@ def classify(keeper, other, v=None, dt=None):
     cropped, turned, re-toned, resized, re-encoded — and that is a note for the
     record rather than a separate decision.
 
-    A reason may skip review only if it proves that relationship. `v` is the
+    A reason may claim that relationship only if it proves it. `v` is the
     alignment verdict the membership decision was made on and `dt` the
     capture-time gap; between them they establish a crop, a quarter turn, or a
     frame whose geometry is untouched and whose tone moved. Where a reason
-    rests on a file property instead, it must show the two pictures agree
-    before it may cull unseen.
+    rests on a file property instead, it must show the two pictures agree.
 
     Evidence is geometric and photometric, never filenames. The time gap is
     used only to insist a crop or a turn belongs to one capture: a crop

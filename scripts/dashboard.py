@@ -77,12 +77,9 @@ def main():
 
     total_files = sum(j["files"] for j in jobs)
     total_bytes = sum(j["bytes"] for j in jobs)
-    n_checks = 0
-    if os.path.isdir(checks):
-        for d in os.listdir(checks):
-            p = os.path.join(checks, d)
-            if os.path.isdir(p):
-                n_checks += len([x for x in os.listdir(p) if not x.startswith('.')])
+    n_checks = len([d for d in os.listdir(checks)
+                    if os.path.isdir(os.path.join(checks, d))]) \
+        if os.path.isdir(checks) else 0
 
     gb = lambda b: f"{b/1e9:.1f} GB" if b >= 1e9 else f"{b/1e6:.0f} MB"
     rows = []
@@ -133,7 +130,7 @@ def main():
   <div class="card accent"><div class="big">{gb(total_bytes)}</div><div class="lbl">reclaimed</div></div>
   <div class="card"><div class="big">{total_files:,}</div><div class="lbl">files culled</div></div>
   <div class="card"><div class="big">{len(jobs)}</div><div class="lbl">jobs run</div></div>
-  <div class="card"><div class="big">{n_checks:,}</div><div class="lbl">reviews on file</div></div>
+  <div class="card"><div class="big">{n_checks:,}</div><div class="lbl">folders reviewed</div></div>
 </div>
 
 <h2>Jobs</h2>

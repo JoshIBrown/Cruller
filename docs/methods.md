@@ -80,10 +80,10 @@ begin with.
 ## Telling an original from a copy of it
 
 **Here:** one rule — the file is not the original and the original is here —
-with labels recording how the copy was made. A label may cull without review
-only if it proves derivation: a containment warp, a quarter turn, an untouched
-geometry with the tone moved. Labels resting on file properties must also show
-the two pictures agree. The keeper comes from a ladder that puts raw first and
+with labels recording how the copy was made. A label may claim derivation only
+if it proves it: a containment warp, a quarter turn, an untouched geometry with
+the tone moved. Labels resting on file properties must also show the two
+pictures agree. The keeper comes from a ladder that puts raw first and
 resolution second.
 
 **In the literature:** this is *image phylogeny*, and it is a developed field.

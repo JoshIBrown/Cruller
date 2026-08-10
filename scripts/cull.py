@@ -3,24 +3,19 @@
 cull.py - the whole job in one command.
 
 Analyse a folder, find files that are redundant against a better copy of the
-same picture, show you proof, and on a second run move them out. No AI, no
-conversation. Nothing is ever deleted.
+same picture, and move them out once somebody has looked at every one. No AI,
+no conversation. Nothing is ever deleted.
 
-    python3 cull.py "/path/to/folder"                  # analyse, then review every cull
-    python3 cull.py "/path/to/folder" --apply          # move the redundant files out
-
-Two runs by design. The first changes nothing and leaves you a SpotCheck folder
-to flip through; the second acts on exactly what the first reported.
+    python3 cull.py "/path/to/folder"          # analyse, then review every cull
+    python3 cull.py "/path/to/folder" --apply  # skip the review, move them out
 
 Two frames are the same photograph when, after one is warped onto the other,
-what is left over is small — measured at 1600px, where a changed expression or a
-turned head is still visible. One rule for every lens.
+what is left over is small — measured at 1600px, where a changed expression or
+a turned head is still visible. One rule for every lens.
 
-Answering `n` to the move question is treated as information rather than a
-refusal: the tool asks whether it culled photographs you can tell apart or kept
-ones you cannot, moves the limit, and re-decides in about a second. Every
-measurement is already made; only the comparison against the limit changes. That
-setting lives for the folder, is written into its records, and does not carry
+A run offers the settings the dial can produce and opens the one you choose as
+a page, where each cull is accepted, refused or turned round on its own. The
+setting lives for that folder, is written into its records, and does not carry
 into the next run.
 """
 import argparse, csv, datetime, hashlib, os, shutil, subprocess, sys, tempfile, time
@@ -35,14 +30,14 @@ from sift import progress
 
 import config
 
-WORKING_DIR = DEFAULT_CULL = DEFAULT_CHECKS = DEFAULT_RECORDS = None
+WORKING_DIR = DEFAULT_CULL = DEFAULT_REVIEWS = DEFAULT_RECORDS = None
 
 
 def set_working(wd):
-    global WORKING_DIR, DEFAULT_CULL, DEFAULT_CHECKS, DEFAULT_RECORDS
+    global WORKING_DIR, DEFAULT_CULL, DEFAULT_REVIEWS, DEFAULT_RECORDS
     WORKING_DIR = wd
     DEFAULT_CULL = os.path.join(wd, "Culled Photos")
-    DEFAULT_CHECKS = os.path.join(wd, "Reviews")
+    DEFAULT_REVIEWS = os.path.join(wd, "Reviews")
     DEFAULT_RECORDS = os.path.join(wd, "Records")
 
 
@@ -165,7 +160,7 @@ def limits_at(lim):
     At the very top of the range nothing is refused for being too different —
     otherwise the highest option would not be the highest, and the ratio would
     quietly hold culls back after the difference limit had saturated. Measured
-    measured on a small folder: the top option gave 0 culls where 2 were available.
+    on a small folder: the top option gave 0 culls where 2 were available.
     """
     if lim >= TOLERANCE_CEILING:
         return lim, float("inf")
@@ -431,25 +426,20 @@ def show_outcomes(found, n_files, at):
               f"   {size_text(freed):>7}{mark}")
 
 
-def ask_next(found, n_files, at, size):
-    """The menu: review an outcome, apply the one reviewed, or leave.
+def ask_next(found, n_files, at):
+    """The menu: open a setting for review, or leave.
 
-    Applying is offered only once an outcome has actually been looked at.
-    Before that there is nothing on screen to have judged, and the plan still
-    sits at whatever limit the analysis happened to use.
+    Applying is not offered here. It belongs to the review page, where the
+    culls being applied are on screen — a second way in from this menu would
+    move photographs that are not in front of anybody.
 
-    One keypress, no Enter. Applying finishes the folder — nothing waits
-    afterwards, because a queue of them would then wait once each, and undo
-    costs one gesture whenever it is wanted.
+    One keypress, no Enter.
     """
     show_outcomes(found, n_files, at)
     keys = {str(i): f"pick{i}" for i in range(1, len(found) + 1)}
     keys["q"] = "quit"
-    offer = [f"[1-{len(found)}] review" if len(found) > 1 else "[1] review"]
-    if at is not None:
-        keys["a"] = "apply"
-        offer.append("[a]pply")
-    offer.append("[q]uit")
+    offer = [f"[1-{len(found)}] review" if len(found) > 1 else "[1] review",
+             "[q]uit"]
     print("  " + "  \u00b7  ".join(offer))
     while True:
         try:
@@ -684,7 +674,7 @@ def audit(folder, opts, session, top=30):
     if len(culls) < 20:
         print("  that is a small plan, so expect a wide interval from it")
     action, answers = review.ask(
-        pairs, opts["checkdir"], f"blind audit \u2014 {len(pairs)} pairs",
+        pairs, opts["reviewdir"], f"blind audit \u2014 {len(pairs)} pairs",
         "same photograph, or different? the tool's answer is hidden",
         blind=True)
     if action is None:
@@ -1035,24 +1025,40 @@ def apply_moves(folder, manifest, dest_root, thumbs_dir, job):
     # including ones nobody looked at. Reviewing and applying are not the same
     # act, and no mechanism inside the folder can tell them apart — see the
     # wrong-direction note in docs/dead-ends.md.
-    shown = os.path.join(DEFAULT_RECORDS, f"{job} - shown.csv")
-    if os.path.exists(shown):
-        labels = os.path.join(DEFAULT_RECORDS, "labels.csv")
-        new = not os.path.exists(labels)
-        with open(labels, "a", newline="") as fh:
-            w = csv.writer(fh)
-            if new:
-                w.writerow(["date", "job", "keeper", "culled", "why",
-                            "margin", "kind", "judgement"])
-            for r in csv.DictReader(open(shown)):
-                w.writerow([now, job, r["keeper"], r["culled"], r["why"],
-                            r["margin"], r["kind"], "approved"])
+    _label(job, now, "applied")
     extra = ""
     if missing:
         extra += f" \u00b7 {missing} already gone"
     if failed:
         extra += f" \u00b7 {failed} failed"
     return moved, freed, extra
+
+
+def _label(job, stamp, outcome):
+    """Add this job's review to the ledger that spans every folder.
+
+    A single review answers one folder. The ledger is what a threshold can be
+    fitted against, so it needs them all, and it needs to know which were acted
+    on: an undo takes the approval back rather than leaving the record claiming
+    those culls were endorsed.
+    """
+    reviewed = os.path.join(DEFAULT_RECORDS, f"{job} - review.csv")
+    if not os.path.exists(reviewed):
+        return
+    labels = os.path.join(DEFAULT_RECORDS, "labels.csv")
+    fresh = not os.path.exists(labels)
+    try:
+        with open(labels, "a", newline="") as fh:
+            w = csv.writer(fh)
+            if fresh:
+                w.writerow(["date", "job", "keeper", "culled", "why",
+                            "difference", "you_said", "reason", "outcome"])
+            for r in csv.DictReader(open(reviewed)):
+                w.writerow([stamp, job, r["keeper"], r["culled"], r["why"],
+                            r["difference"], r["verdict"], r["reason"],
+                            outcome])
+    except OSError:
+        pass
 
 
 def reset(no_prompt=False):
@@ -1094,12 +1100,12 @@ def reset(no_prompt=False):
         return total
 
     cache = os.path.join(WORKING_DIR, "Cache")
-    checks = DEFAULT_CHECKS
+    reviews = DEFAULT_REVIEWS
     print(f"  {len(jobs)} applied job{'' if len(jobs) == 1 else 's'} to undo, "
           f"{to_restore:,} photograph{'' if to_restore == 1 else 's'} to put back")
     print(f"  {size_text(weigh(cache))} of cache \u2014 what was read from each "
           f"photograph, every pairwise verdict, every keypoint screen")
-    print(f"  {size_text(weigh(checks))} of review pages")
+    print(f"  {size_text(weigh(reviews))} of review pages")
     print("  judgements are kept")
     if not no_prompt:
         print("  reset everything? [y]es  [n]o")
@@ -1124,7 +1130,7 @@ def reset(no_prompt=False):
     # unrecognised file is kept. Deleting what you cannot name is how evidence
     # goes missing.
     made_by_a_run = (" - plan.csv", " - log.csv", " - log (undone).csv",
-                     " - shown.csv", " - source.txt", " - settings.txt",
+                     " - source.txt", " - settings.txt",
                      " - thumbnails")
     removed = 0
     for f in sorted(os.listdir(DEFAULT_RECORDS)) if os.path.isdir(DEFAULT_RECORDS) else []:
@@ -1137,7 +1143,7 @@ def reset(no_prompt=False):
         except OSError:
             pass
 
-    for path in (cache, checks, DEFAULT_CULL):
+    for path in (cache, reviews, DEFAULT_CULL):
         if os.path.isdir(path):
             shutil.rmtree(path, ignore_errors=True)
         os.makedirs(path, exist_ok=True)
@@ -1208,15 +1214,8 @@ def undo(job, hint=True):
     prune_empty(os.path.join(DEFAULT_CULL, job))
     # An undo takes the approval back; the label record should say so rather
     # than keep claiming those culls were endorsed.
-    labels = os.path.join(DEFAULT_RECORDS, "labels.csv")
-    shown = os.path.join(DEFAULT_RECORDS, f"{job} - shown.csv")
-    if os.path.exists(labels) and os.path.exists(shown):
-        with open(labels, "a", newline="") as fh:
-            w = csv.writer(fh)
-            stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            for r in csv.DictReader(open(shown)):
-                w.writerow([stamp, job, r["keeper"], r["culled"], r["why"],
-                            r["margin"], r["kind"], "retracted by undo"])
+    _label(job, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+           "retracted by undo")
     print(f"\n  restored {restored:,} of {len(rows):,}")
     if missing:
         print(f"  {missing:,} already gone")
@@ -1353,7 +1352,8 @@ def main():
         # over exactly these files; their common parent stands in as the folder
         # so every record and relpath works as usual.
         if a.apply:
-            sys.exit("a selection is applied by answering y during its own run")
+            sys.exit("a selection is applied from its review page; drop the "
+                     "files again to look at them")
         with open(a.files) as fh:
             sel = [os.path.abspath(ln.rstrip("\n")) for ln in fh if ln.strip()]
         sel = [p for p in sel if os.path.isfile(p)]
@@ -1432,7 +1432,7 @@ def main():
         if not a.apply:
             retire_stale_plans(folder, keep=job)   # re-dragging a folder = fresh look
     opts["manifest"] = os.path.join(DEFAULT_RECORDS, f"{job} - plan.csv")
-    opts["checkdir"] = os.path.join(DEFAULT_CHECKS, job)
+    opts["reviewdir"] = os.path.join(DEFAULT_REVIEWS, job)
     opts["huntdir"] = os.path.join(WORKING_DIR, "Close Calls", job)
 
     print(f"\n\u25cf {os.path.basename(folder)}"
@@ -1440,8 +1440,8 @@ def main():
     if a.verbose and not opts["auto"]:
         print(f"  limit {opts['block']:.0f}/{opts['ratio']:.0f}, set by hand")
     apply_hint = (f'apply with:  ./crull "{folder}" --apply' if not sel else
-                  "a selection applies when you answer y \u2014 drop the files "
-                  "again to redo")
+                  "a selection applies from its review page \u2014 drop the "
+                  "files again to look again")
 
     if a.apply:
         moved, freed, extra = apply_moves(
@@ -1483,10 +1483,7 @@ def main():
         at = None                             # nothing rendered until chosen
 
         while True:
-            red = [r for r in csv.DictReader(open(opts["manifest"]))
-                   if r["verdict"] == "REDUNDANT"]
-            size = sum(float(r["MB"] or 0) for r in red) * 1e6
-            choice = ask_next(found, session["files"], at, size)
+            choice = ask_next(found, session["files"], at)
 
             if choice == "quit":
                 print("  no setting chosen \u00b7 nothing moved")
@@ -1500,7 +1497,7 @@ def main():
                 continue
 
             action, answers = review.ask(
-                pairs, opts["checkdir"],
+                pairs, opts["reviewdir"],
                 f"{job} — {len(pairs)} to decide",
                 "keeping on the left, moving out on the right")
             record_review(job, pairs, answers, action or "closed", at)
