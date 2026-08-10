@@ -1,0 +1,1526 @@
+#!/usr/bin/env python3
+"""
+cull.py - the whole job in one command.
+
+Analyse a folder, find files that are redundant against a better copy of the
+same picture, show you proof, and on a second run move them out. No AI, no
+conversation. Nothing is ever deleted.
+
+    python3 cull.py "/path/to/folder"                  # analyse: manifest + proof images
+    python3 cull.py "/path/to/folder" --apply          # move the redundant files out
+
+Two runs by design. The first changes nothing and leaves you a SpotCheck folder
+to flip through; the second acts on exactly what the first reported.
+
+Two frames are the same photograph when, after one is warped onto the other,
+what is left over is small — measured at 1600px, where a changed expression or a
+turned head is still visible. One rule for every lens.
+
+Answering `n` to the move question is treated as information rather than a
+refusal: the tool asks whether it culled photographs you can tell apart or kept
+ones you cannot, moves the limit, and re-decides in about a second. Every
+measurement is already made; only the comparison against the limit changes. That
+setting lives for the folder, is written into its records, and does not carry
+into the next run.
+"""
+import argparse, csv, datetime, hashlib, os, shutil, subprocess, sys, tempfile, time
+from collections import defaultdict
+from PIL import Image, ImageDraw, ImageFont
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from loaders import open_image
+import sift
+from sift import progress
+
+import config
+
+WORKING_DIR = DEFAULT_CULL = DEFAULT_CHECKS = DEFAULT_RECORDS = None
+
+
+def set_working(wd):
+    global WORKING_DIR, DEFAULT_CULL, DEFAULT_CHECKS, DEFAULT_RECORDS
+    WORKING_DIR = wd
+    DEFAULT_CULL = os.path.join(wd, "Culled Photos")
+    DEFAULT_CHECKS = os.path.join(wd, "Spot Checks")
+    DEFAULT_RECORDS = os.path.join(wd, "Records")
+
+
+if config.working_dir():
+    set_working(config.working_dir())
+
+
+def job_for_folder(folder):
+    """Is this dropped folder a finished job, rather than photos to cull?
+
+    Dragging a folder out of `Culled Photos` onto the app plainly means "put
+    this back", not "cull the culled photos again". The test is structural rather than
+    a guess about contents: the folder must sit under the working folder, in
+    `Culled Photos` or `Spot Checks`, and its job name must have a record.
+
+    Returns (job, state) where state is one of `undoable`, `already undone`,
+    `no record`, or (None, reason) when the folder is somewhere else entirely.
+    """
+    if WORKING_DIR is None:
+        return None, None
+    wd = os.path.realpath(WORKING_DIR)
+    here = os.path.realpath(folder)
+    if here == wd:
+        return None, "the working folder itself"
+    if os.path.commonpath([wd, here]) != wd:
+        return None, None                      # an ordinary folder of photos
+    rel = os.path.relpath(here, wd).split(os.sep)
+    if rel[0] not in ("Culled Photos", "Spot Checks"):
+        return None, f"inside the working folder ({rel[0]})"
+    if len(rel) < 2:
+        return None, rel[0]                    # the container, not one job
+    job = rel[1]                               # deeper is fine: a job's subfolder
+    if os.path.exists(os.path.join(DEFAULT_RECORDS, f"{job} - log.csv")):
+        return job, "undoable"
+    if os.path.exists(os.path.join(DEFAULT_RECORDS, f"{job} - log (undone).csv")):
+        return job, "already undone"
+    return job, "no record"
+
+
+def undo_from_drop(folder, no_prompt=False):
+    """Handle a folder that is a job rather than a library. Always asks first.
+
+    Culling asks before it moves anything and so must this: a drop is one
+    gesture, easy to make by accident, and it moves photographs.
+    """
+    job, state = job_for_folder(folder)
+    if job is None:
+        if state in ("Culled Photos", "Spot Checks"):
+            jobs = sorted(f[:-len(" - log.csv")] for f in os.listdir(DEFAULT_RECORDS)
+                          if f.endswith(" - log.csv")) if DEFAULT_RECORDS and \
+                os.path.isdir(DEFAULT_RECORDS) else []
+            print(f"  that is all of {state}, not one job.")
+            if jobs:
+                print("  drop one of these:")
+                for j in jobs:
+                    print(f"    {j}")
+            return True
+        if state:
+            print(f"  that is {state} \u2014 nothing to cull.")
+            return True
+        return False                           # not ours; carry on and cull it
+
+    if state == "already undone":
+        print(f"● {job}")
+        print("  already undone.")
+        return True
+    if state == "no record":
+        print(f"● {job}")
+        print("  no log \u2014 analysed but never applied, so nothing to undo.")
+        return True
+
+    log = os.path.join(DEFAULT_RECORDS, f"{job} - log.csv")
+    rows = list(csv.DictReader(open(log, errors="replace")))
+    gb = 0.0
+    for r in rows:
+        try:
+            gb += float(r.get("MB") or 0) / 1024
+        except ValueError:
+            pass
+    print(f"● {job}")
+    print(f"  a finished job \u00b7 {len(rows):,} "
+          f"file{'' if len(rows)==1 else 's'} ({size_text(gb * 1e9)})")
+    if no_prompt:
+        print("  --no-prompt: not undone. Use --undo.")
+        return True
+    print(f"  put {len(rows):,} file{'' if len(rows)==1 else 's'} back?  [y/n] ",
+          end="", flush=True)
+    answer = ""
+    while answer not in ("y", "n"):
+        try:
+            answer = read_key()
+        except (EOFError, KeyboardInterrupt):
+            answer = "n"
+    print(answer)
+    if answer != "y":
+        print("  left alone.")
+        return True
+    undo(job)
+    return True
+
+
+# How far one "be pickier" or "cull more" step moves the limit. Big enough to
+# change the answer, small enough that a couple of steps do not fly past the
+# setting you wanted.
+# The range runs 0 to 100 and always means the same thing. At 0 nothing is
+# culled for merely looking alike — only what is provably a copy, which no
+# setting can spare. At 100 every pair that can be aligned at all is a
+# duplicate. Past about 41 the score stops sorting what a reviewer can tell apart
+# from what he cannot, so up there the choice is taste.
+TOLERANCE_FLOOR, TOLERANCE_CEILING = 0.0, 100.0
+# More than nine and choosing one takes two keypresses, which the menu would
+# act on after the first.
+MAX_OPTIONS = 5
+
+
+def limits_at(lim):
+    """The two limits a setting means: the difference, and the texture-relative
+    ratio that moves with it.
+
+    At the very top of the range nothing is refused for being too different —
+    otherwise the highest option would not be the highest, and the ratio would
+    quietly hold culls back after the difference limit had saturated. Measured
+    measured on a small folder: the top option gave 0 culls where 2 were available.
+    """
+    if lim >= TOLERANCE_CEILING:
+        return lim, float("inf")
+    return lim, lim * (sift.DUP_RATIO / sift.DUP_BLOCK)
+
+
+def size_text(nbytes):
+    """Bytes as text. GB only when it really is gigabytes."""
+    return f"{nbytes/1e9:.1f} GB" if nbytes >= 1e9 else f"{nbytes/1e6:.0f} MB"
+
+
+def wait_to_close(message):
+    """Say what happened, then hold the window until the person is finished.
+
+    A folder with nothing in it must still wait, because since
+    the window began closing itself meant a drop could flash and vanish with
+    no account of what happened. Nothing closes unannounced now.
+    """
+    print(f"  {message}")
+    print("  [q]uit")
+    while True:
+        try:
+            if read_key() == "q":
+                return
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+
+
+def read_key():
+    """One keypress, no Enter. Falls back to a whole line when piped.
+
+    The cursor is hidden while waiting. Nothing is being typed — one key is
+    being pressed — so a block parked on the line below the menu is just a
+    smudge on the screen.
+    """
+    if not sys.stdin.isatty():
+        line = sys.stdin.readline()
+        if not line:
+            raise EOFError                    # nothing left to read: stop asking
+        return line.strip().lower()[:1]
+    try:
+        import termios, tty
+    except ImportError:                       # Windows
+        import msvcrt
+        return msvcrt.getch().decode(errors="ignore").lower()
+    fd = sys.stdin.fileno()
+    saved = termios.tcgetattr(fd)
+    hide = sys.stdout.isatty()
+    try:
+        if hide:
+            sys.stdout.write("\033[?25l")
+            sys.stdout.flush()
+        tty.setcbreak(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+        if hide:
+            sys.stdout.write("\033[?25h")     # always give it back
+            sys.stdout.flush()
+    if ch in ("\x03", "\x04"):                # Ctrl-C, Ctrl-D still mean that
+        raise KeyboardInterrupt
+    return ch.lower()
+
+
+def outcomes(session, manifest):
+    """The handful of results the dial can produce, as a short list to pick from.
+
+    Raising the limit can only ever cull more — merging groups never unmerges
+    them — so the settings run from fewest culls to most, and any one of them
+    can be placed by where it falls between two already known.
+
+    Two are given rather than found: the most conservative setting and the most
+    thorough are always worth offering. The rest are placed in the widest gap
+    between the cull counts known so far, which is where a new option is worth
+    the most.
+
+    Ctrl-C keeps whatever has been found.
+    """
+    import contextlib, io
+    # Each re-decide runs a full comparison pass and would draw its own bar;
+    # this stage claims the line so the scan reads as the one step it is.
+    STAGE = "determining options"
+    sift.progress._only = STAGE
+
+    part = [0.0]        # how far through the setting currently being weighed
+    shown = [0.0]       # what the bar last showed; it may never go backwards
+
+    def draw(finished=False):
+        """Redraw the stage line: settings weighed, plus the one in progress.
+
+        The setting in flight counts fractionally, from the progress of the
+        comparison running inside it, so the bar moves from the first second.
+        Two tidier measures do not: the range the bisection has resolved never
+        moves early, because the first two settings resolve none of it, and
+        whole settings counted do not move during the first one — which is the
+        slowest, since it weighs the top of the dial where nearly everything
+        aligns.
+        """
+        # Against the 31 settings this could weigh, the first one is 3% of the
+        # bar and most of the wait, so a truthful bar barely moved. Measure
+        # against a guess that starts small and grows as more settings prove
+        # necessary, and never let it slip backwards. Early progress is then
+        # visible, which is when anyone is actually watching.
+        if finished:
+            shown[0] = 1.0
+        else:
+            guess = max(4, len(seen) + 2)
+            shown[0] = max(shown[0], min(0.99, (len(seen) + part[0]) / guess))
+        # No count: how many settings a bisection weighed is a fact about the
+        # search, not about the photographs. The column stays empty but keeps
+        # its width, so the clock sits under the clock above it.
+        sift.progress(shown[0], 1.0, STAGE, counts=False)
+
+    def relay(inner_done, inner_total):
+        part[0] = min(1.0, inner_done / inner_total) if inner_total else 0.0
+        draw()
+
+    sift.progress._relay = relay
+
+    seen = {}
+
+    rungs, lim = [TOLERANCE_FLOOR], 1.0     # 0 first, then geometric to the top
+    while lim < TOLERANCE_CEILING:
+        rungs.append(lim)
+        lim *= 1.18                          # fine: bisection makes rungs cheap
+    rungs.append(TOLERANCE_CEILING)
+    span = len(rungs) - 1                   # the top of the range to bisect
+
+    def at(i):
+        if i not in seen:
+            with contextlib.redirect_stdout(io.StringIO()):
+                r = session["regroup"](*limits_at(rungs[i]))
+            rows = [x for x in csv.DictReader(open(manifest))
+                    if x["verdict"] == "REDUNDANT"]
+            r["judged"] = sum(1 for x in rows if x["why"] not in MECHANICAL)
+            seen[i] = r
+            part[0] = 0.0                     # that setting is done; start the next
+            draw()
+        return seen[i]
+
+    # The ends are not searched for: the most conservative setting and the most
+    # thorough one are always offered, so they are simply weighed. That leaves
+    # three to find, and each one costs a full re-decide — every setting walks
+    # the candidate set again, about ten seconds on a folder of a thousand
+    # photographs.
+    #
+    # So they are not hunted by bisection. Each is placed where it does the most
+    # good: in the widest gap between the cull counts already known. Three
+    # placements, five settings weighed, five options — against seventeen for
+    # the same five before.
+    def widest_gap():
+        """The two known settings furthest apart in what they would cull."""
+        known = sorted(seen)
+        best, gap = None, -1
+        for lo, hi in zip(known, known[1:]):
+            if hi - lo < 2:
+                continue                      # no unweighed setting in between
+            here = seen[hi]["redundant"] - seen[lo]["redundant"]
+            if here > gap:
+                best, gap = (lo, hi), here
+        return best
+
+    at(0)
+    draw()
+    at(span)
+    try:
+        for _ in range(MAX_OPTIONS - 2):
+            pair = widest_gap()
+            if pair is None:
+                break                         # every setting between is weighed
+            at((pair[0] + pair[1]) // 2)
+            draw()
+    except KeyboardInterrupt:
+        pass                                  # keep whatever has been found
+    finally:
+        draw(finished=True)
+        sift.progress._only = None            # the stages after this show again
+        sift.progress._relay = None
+
+    found = []
+    for i in sorted(seen):
+        r = seen[i]
+        if r["redundant"] and (not found or r["redundant"] != found[-1][1]):
+            found.append((rungs[i], r["redundant"], r["freed"], r["judged"]))
+    if len(found) > MAX_OPTIONS:
+        # Thin them out evenly, always keeping the safest and the most
+        # thorough, and say so — a list that silently drops choices is worse
+        # than a longer one.
+        keep = sorted({round(i * (len(found) - 1) / (MAX_OPTIONS - 1))
+                       for i in range(MAX_OPTIONS)})
+        found = [found[i] for i in keep]
+    return found
+
+
+def show_outcomes(found, n_files, at):
+    """The list to pick from: what each setting would actually do."""
+    # The count is sized to this run, so a small folder does not read as a row
+    # of gaps and a large one still lines up.
+    w = max(len(f"{n:,}") for _, n, _, _ in found)
+    for i, (lim, n, freed, judged) in enumerate(found, 1):
+        mark = "   \u2190 reviewing" if at is not None and i == at else ""
+        seen = f"{judged:,} to review" if judged else "nothing to review"
+        print(f"    {i}   cull {n:>{w},} of {n_files:,}"
+              f"   {n / n_files * 100:5.1f}% of the folder"
+              f"   {size_text(freed):>7}   {seen}{mark}")
+
+
+def ask_next(found, n_files, at, applied, size):
+    """The menu: show an outcome, apply the one showing, or leave.
+
+    Applying is offered only once an outcome has actually been looked at.
+    Before that there is nothing on screen to have judged, and the plan still
+    sits at whatever limit the analysis happened to use.
+
+    One keypress, no Enter. After a cull the list is put away — undo brings it
+    back, so nothing is a dead end.
+    """
+    if applied:
+        print(f"  {n_files:,} moved \u00b7 {size_text(size)}")
+        print("  [u]ndo  [q]uit")
+        keys = {"u": "undo", "q": "quit"}
+    else:
+        show_outcomes(found, n_files, at)
+        keys = {str(i): f"pick{i}" for i in range(1, len(found) + 1)}
+        keys["q"] = "quit"
+        offer = [f"[1-{len(found)}] review" if len(found) > 1 else "[1] review"]
+        if at is not None:
+            keys["a"] = "apply"
+            offer.append("[a]pply")
+        offer.append("[q]uit")
+        print("  " + "  \u00b7  ".join(offer))
+    while True:
+        try:
+            pick = read_key()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return "quit"
+        if pick in keys:
+            print(f"  > {pick}")              # cbreak eats the echo; show it back
+            return keys[pick]
+
+
+def record_settings(job, session):
+    """Write down what this folder was judged at.
+
+    A folder-specific setting means two jobs were held to different standards,
+    and six months from now "why was this culled" needs an answer. The number
+    goes in the records; it is deliberately not carried into the next run.
+    """
+    if session is None or not DEFAULT_RECORDS:
+        return
+    try:
+        r = session["result"]
+        with open(os.path.join(DEFAULT_RECORDS, f"{job} - settings.txt"), "w") as fh:
+            ratio = ("no limit" if r['ratio'] == float("inf")
+                     else f"{r['ratio']:.1f}")
+            fh.write(f"judged at block<={r['block']:.1f}% ratio<={ratio}\n")
+            fh.write(f"default was block<={sift.DUP_BLOCK:.1f}% "
+                     f"ratio<={sift.DUP_RATIO:.1f}\n")
+    except Exception as e:
+        # A cull whose setting went unrecorded is a cull nobody can explain
+        # later, so this says so rather than failing quietly.
+        print(f"  \u26a0 could not record the setting for {job}: {str(e)[:60]}")
+
+
+def _log_hunt(stamp, folder, picked, limit, judged):
+    """One paragraph per hunt, appended to a single ledger in Records.
+
+    A few hundred bytes each. The images are thrown away; this is not.
+    """
+    if not DEFAULT_RECORDS:
+        return
+    try:
+        scores = [p[2] for p in picked]
+        n_cull = sum(1 for p in picked if p[4])
+        path = os.path.join(DEFAULT_RECORDS, "hunts.md")
+        new = not os.path.exists(path)
+        with open(path, "a") as fh:
+            if new:
+                fh.write("# Hunts\n\nWhat each review of the tool's own "
+                         "decisions turned up. The images are thrown away; "
+                         "this is not.\n")
+            fh.write(f"\n## {stamp} \u00b7 {os.path.basename(folder.rstrip(os.sep))}\n\n")
+            fh.write(f"- {judged:,} pairs judged at full size; showed {len(picked)} "
+                     f"({n_cull} culled, {len(picked) - n_cull} kept), scoring "
+                     f"{min(scores):.0f}\u2013{max(scores):.0f} against a limit of {limit:.0f}\n")
+            fh.write(f"- answers: `hunt {stamp} - pairs.csv`, sorted folders in Close Calls\n")
+            fh.write("- **what the sort showed:** \n")
+    except OSError:
+        pass
+
+
+def hunt(folder, opts, session, top=100):
+    """Turn a run into a blind sorting exercise. Moves nothing, changes nothing.
+
+    The goal: lose every pair a reviewer cannot tell apart, keep every
+    pair he can, judged **at full size**. So each sheet shows the two frames
+    whole, and underneath them the exact patch where they differ most, cropped
+    from both originals at 1:1 — nobody should have to search two photographs
+    for a difference the tool has already located.
+
+    Three lessons from the first hunt are built in:
+
+    - **Blind.** The sheets carry a number and nothing else. The first version
+      printed CULLED or KEPT on each pair, which told the reviewer the answer
+      before they had looked.
+    - **Both sides.** A wrong cull loses a photograph; a wrong keep defeats the
+      point of the tool. Under the stated goal both are failures.
+    - **Spread and shuffled.** Stratified across the whole score range, then
+      shuffled so the sheet number says nothing about the score. The first
+      version ranked by distance from the limit, and everything the reviewer
+      saw was within 0.15 of it — proof only that a boundary is a boundary.
+
+    The person sorts the sheets into `same/` and `different/` in Finder. The
+    number-to-pair mapping goes only to Records, keeping the sort blind.
+    """
+    import random
+    scored = (session or {}).get("scored") or []
+    limit = (session or {}).get("result", {}).get("block", sift.DUP_BLOCK)
+    usable = [r for r in scored if r[5] is not None]
+    if not usable:
+        print("  nothing was judged at full size \u2014 nothing to sort")
+        return
+    lo, hi = min(r[2] for r in usable), max(r[2] for r in usable)
+    bands = 10
+    width = (hi - lo) / bands or 1.0
+    buckets = defaultdict(list)
+    for r in usable:
+        buckets[min(bands - 1, int((r[2] - lo) / width))].append(r)
+    per = max(1, top // bands)
+    picked = []
+    for bkey in sorted(buckets):
+        rows = buckets[bkey]
+        random.Random(len(rows)).shuffle(rows)
+        picked += rows[:per]
+    if len(picked) < top:
+        rest = [r for r in usable if r not in picked]
+        random.Random(top).shuffle(rest)
+        picked += rest[:top - len(picked)]
+    picked = picked[:top]
+    stamp = datetime.datetime.now().strftime("%Y.%m.%d %H%M")
+    random.Random(stamp).shuffle(picked)      # sheet number must not encode score
+
+    out_dir = opts["huntdir"]
+    os.makedirs(out_dir, exist_ok=True)
+    for f in os.listdir(out_dir):
+        p = os.path.join(out_dir, f)
+        try:
+            if f.lower().endswith((".jpg", ".csv")):
+                os.remove(p)
+        except OSError:
+            pass
+    for sub in ("same", "different"):
+        os.makedirs(os.path.join(out_dir, sub), exist_ok=True)
+
+    # The answer key lives in Records, not beside the sheets: the sort is blind.
+    with open(os.path.join(DEFAULT_RECORDS, f"hunt {stamp} - pairs.csv"),
+              "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["sheet", "verdict", "score", "limit", "ratio", "kept", "other"])
+        for n, (pa, pb, blk, rat, ok, where, dx, dy) in enumerate(picked, 1):
+            w.writerow([f"{n:03d}", "culled" if ok else "kept", blk, limit, rat,
+                        os.path.relpath(pa, folder), os.path.relpath(pb, folder)])
+
+    W, PAD, LBL, CROP = 700, 8, 30, 240
+    try:
+        font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 22)
+    except Exception:
+        try:
+            font = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
+        except Exception:
+            font = ImageFont.load_default()
+
+    def crop_native(path, fx, fy, half):
+        im = open_image(path).convert("RGB")
+        x, y = int(fx * im.width), int(fy * im.height)
+        box = (max(0, x - half), max(0, y - half),
+               min(im.width, x + half), min(im.height, y + half))
+        return im.crop(box), im.width
+
+    made = 0
+    for n, (pa, pb, blk, rat, ok, where, dx, dy) in enumerate(picked, 1):
+        progress(n, len(picked), "sheets")
+        try:
+            fx, fy = where
+            ca, wa = crop_native(pa, fx, fy, CROP)
+            # The same physical patch in the other frame: shifted by the
+            # measured camera motion, and scaled if the resolutions differ.
+            cb, wb = crop_native(pb, fx - dx, fy - dy,
+                                 max(24, int(CROP * 1.0)))
+            if wb != wa and wa:
+                cb = cb.resize((int(cb.width * wa / wb) or 1,
+                                int(cb.height * wa / wb) or 1))
+            ia = open_image(pa).convert("RGB"); ib = open_image(pb).convert("RGB")
+        except Exception:
+            continue
+        ia.thumbnail((W, W)); ib.thumbnail((W, W))
+        ch = max(ca.height, cb.height, 1)
+        H = max(ia.height, ib.height) + ch + LBL + 22
+        sheet = Image.new("RGB", (W * 2 + PAD * 3, H + 8), (20, 20, 22))
+        d = ImageDraw.Draw(sheet)
+        d.text((PAD, 4), f"{n:03d}", fill=(200, 200, 205), font=font)
+        y0 = LBL
+        sheet.paste(ia, (PAD, y0)); sheet.paste(ib, (W + PAD * 2, y0))
+        y1 = y0 + max(ia.height, ib.height) + 14
+        d.text((PAD, y1 - 12), "the most different spot, at full size:",
+               fill=(140, 140, 145), font=font)
+        cx = (W - ca.width) // 2
+        sheet.paste(ca, (PAD + max(0, cx), y1 + 12))
+        sheet.paste(cb, (W + PAD * 2 + max(0, (W - cb.width) // 2), y1 + 12))
+        sheet.save(os.path.join(out_dir, f"{n:03d}.jpg"), quality=88)
+        made += 1
+    _log_hunt(stamp, folder, picked, limit, len(scored))
+    print(f"  {len(scored):,} pairs judged \u00b7 {made} sheets, blind, spread "
+          f"across the whole range")
+    print(f"  sort them into same/ and different/ \u2014 same means you cannot "
+          f"tell them apart at full size")
+    print(f"  the answer key is Records/hunt {stamp} - pairs.csv; do not peek")
+    reveal(out_dir)
+
+
+def analyse(folder, opts):
+    argv = [folder, "--recursive", "--exclude", WORKING_DIR,
+            "--block", str(opts["block"]), "--ratio", str(opts["ratio"]),
+            "--csv", opts["manifest"]]
+    if opts.get("files"):
+        argv += ["--files", opts["files"]]
+    if not opts.get("auto"):
+        argv += ["--fixed"]
+    if opts.get("quiet", True):
+        argv += ["--quiet"]
+    if opts.get("no_summary"):
+        argv += ["--no-summary"]
+    return sift.main(argv)
+
+
+# Reasons decided by rule rather than by a threshold. The keeper is larger, or
+# raw, or less compressed, or the file is byte-identical — settled by rule — or
+# the pair is one capture twice (a crop or tonal edit of the same instant,
+# rule. Looking at a proof image cannot change these answers, so they are kept
+# out of the review and attention goes where a decision could be wrong.
+MECHANICAL = {"exact copy", "identical picture", "smaller copy", "resave",
+              "export of raw", "cropped copy", "rotated copy", "tonal edit"}
+
+# Biggest difference first, and only so many. The review is a list that stops
+# being interesting as you go down it, so ordering is the whole design: the
+# pairs most likely to be wrong are the ones you can most plainly see apart.
+#
+# Ranking by how much of a pair's *allowance* it used is not the
+# same thing when the limit can move: a pair at 29 under a tight setting
+# outranked one at 37 under a loose one, though 37 is the bigger difference.
+# That ranking also failed its own promise: across the 115 sheets reviewed
+# in one review the rejection rate was flat (13%, 10%, 13% by third), so it was
+# not finding the wrong calls. Raw difference is what he asked to see.
+MAX_SHOWN = 120
+# Above 1.0 a cull was never actually cleared against its own keeper. Grouping
+# now makes that impossible, so this should never fire; if it does, the
+# guarantee has broken and the tag says so.
+MARGIN_CHAIN = 1.0
+
+
+def spot_checks(folder, manifest, out_dir, count=None):
+    """Build the proof images. The run decides how many, not a knob.
+
+    Small runs show every call. Big runs show every call that came close to
+    the limit — every mistake found so far has been one of those — plus enough
+    sampled ordinary calls to bound the error rate. So a run of clean bursts
+    produces a short review and a run full of coin flips produces a long one,
+    which is exactly the attention each deserves.
+
+    `count` forces a fixed total (old behaviour); 0 skips proof images.
+    """
+    rows = list(csv.DictReader(open(manifest)))
+    by_group = defaultdict(list)
+    for r in rows:
+        by_group[r["group"]].append(r)
+
+    # One proof image per group, not per file. A decision is "keep this one out
+    # of these six", so showing it as five separate pairs of the same keeper
+    # made a review of 136 real decisions look like 244 near-identical photos.
+    pairs = []
+    for gid, members in by_group.items():
+        keep = next((m for m in members if m["verdict"] == "KEEP"), None)
+        if not keep:
+            continue
+        losers = []
+        for m in members:
+            if m["verdict"] != "REDUNDANT" or m["why"] in MECHANICAL:
+                continue
+            try:
+                margin = float(m.get("margin") or 0)
+            except ValueError:
+                margin = 0.0
+            try:
+                block = float(m.get("block_pct") or 0)
+            except ValueError:
+                block = 0.0
+            losers.append((m["file"], m["why"], margin,
+                           m.get("why_inferior", ""), block))
+        if losers:
+            # Only the group's most different loser is worth showing. If that one
+            # is a fair cull then every other member is closer to the keeper than
+            # it, so it is fair too — one pair settles the whole group.
+            losers.sort(key=lambda x: -x[4])
+            f, why, margin, because, block = losers[0]
+            pairs.append((gid, keep["file"], f, why, margin, len(losers),
+                          because, block))
+    n_culls = sum(1 for r in rows if r["verdict"] == "REDUNDANT")
+    n_mech = sum(1 for r in rows
+                 if r["verdict"] == "REDUNDANT" and r["why"] in MECHANICAL)
+    if not pairs or count == 0:
+        return 0, n_culls, {}, n_mech
+    judged = pairs
+    total = len(pairs)
+
+    by_difference = sorted(judged, key=lambda p: -p[7])
+    shown = by_difference[:count if count is not None else MAX_SHOWN]
+    chosen = [(p, "chain" if p[4] > MARGIN_CHAIN else "closest") for p in shown]
+    n_quiet = len(judged) - len(chosen)
+
+    # A fresh analysis replaces the old proof images rather than adding to them.
+    # Numbering restarts each run, so leaving the previous set behind would mix
+    # two runs' judgements in one folder with no way to tell them apart. These
+    # are regenerable output in the working folder, never anyone's photos.
+    os.makedirs(out_dir, exist_ok=True)
+    stale = [f for f in os.listdir(out_dir) if f.lower().endswith(".jpg")]
+    for f in stale:
+        try:
+            os.remove(os.path.join(out_dir, f))
+        except OSError:
+            pass
+    if stale:
+        print(f"  replaced {len(stale)} proof images")
+    try:
+        font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 24)
+    except Exception:
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
+        except Exception:
+            font = ImageFont.load_default()
+    try:
+        small = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 19)
+    except Exception:
+        small = font
+    def fit(text, px, fnt):
+        """Trim from the left until it fits: the tail of a filename is the part
+        that differs, so the tail is kept and the head trimmed."""
+        try:
+            if fnt.getlength(text) <= px:
+                return text
+            while text and fnt.getlength("…" + text) > px:
+                text = text[1:]
+            return "…" + text
+        except AttributeError:
+            return text[:24]
+
+    W, PAD, LBL = 900, 8, 34
+    written = 0
+    for n, ((gid, keep, drop, why, margin, n_losers, because, block),
+            kind) in enumerate(chosen, 1):
+        progress(n, len(chosen), "proof images")
+        try:
+            a = open_image(os.path.join(folder, keep)).convert("RGB")
+            b = open_image(os.path.join(folder, drop)).convert("RGB")
+        except Exception:
+            continue
+        # Both frames to the same box, so a difference on screen is a difference
+        # in the photograph and not in how it was scaled.
+        a.thumbnail((W, W)); b.thumbnail((W, W))
+        H = max(a.height, b.height)
+        s = Image.new("RGB", (W * 2 + PAD * 3, H + LBL * 2 + 10), (20, 20, 22))
+        d = ImageDraw.Draw(s)
+        d.text((PAD, 5), "KEEP", fill=(130, 255, 150), font=font)
+        d.text((W + PAD * 2, 5), fit((because or why).upper(), W - PAD, font),
+               fill=(255, 140, 140), font=font)
+        s.paste(a, (PAD, LBL)); s.paste(b, (W + PAD * 2, LBL))
+        d.text((PAD, LBL + H + 4), fit(keep, W - PAD, small), fill=(170, 170, 175), font=small)
+        tail = os.path.basename(drop)
+        if n_losers > 1:
+            tail += f"   (+{n_losers - 1} more in this group, all closer to the keeper than this one)"
+        d.text((W + PAD * 2, LBL + H + 4), fit(tail, W - PAD, small),
+               fill=(170, 170, 175), font=small)
+        name = f"{n:03d}.jpg" if kind != "chain" else f"{n:03d}_chain.jpg"
+        s.save(os.path.join(out_dir, name), quality=88)
+        written += 1
+    # What the person was actually shown, so that applying can record their
+    # judgement. Every correction so far came from a viewed pair; these
+    # are the labels a future calibrated model would train on.
+    if chosen:
+        shown_path = os.path.join(DEFAULT_RECORDS,
+                                  os.path.basename(out_dir) + " - shown.csv")
+        with open(shown_path, "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["keeper", "culled", "why", "margin", "kind", "group_losers",
+                        "why_inferior", "block_pct"])
+            for (gid, keep, drop, why, margin, n_losers, because,
+                 block), kind in chosen:
+                w.writerow([keep, drop, why, round(margin, 3), kind, n_losers,
+                            because, round(block, 1)])
+    counts = {k: sum(1 for _, kind in chosen if kind == k) for k in ("chain", "closest")}
+    counts["quiet"] = n_quiet
+    counts["groups"] = len(judged)
+    return written, n_culls, counts, n_mech
+
+
+def job_name(folder, source=None):
+    """Identifier shared by every output of one run: date + source folder.
+
+    Two folders can share a name — Trips/2024 and Garden/2024 — so a
+    job records the path it came from, and a clashing name from a different
+    folder gets a number rather than quietly overwriting the first one's record.
+
+    The same folder run twice reuses the job only while that job is still open,
+    so that `--apply` writes into the run that planned it. Once a log exists the
+    job is finished, and a fresh run starts a numbered one instead — otherwise a
+    second pass over an already-culled folder finds nothing and overwrites the
+    first run's plan with an empty file. That happened to eight of the trip jobs
+    on a run of eight trip folders.
+
+    `source` overrides what the marker records — a dropped selection stores a
+    tag distinct from its parent folder's path, so a selection job can never be
+    mistaken for (or resumed as) a run over the whole folder.
+    """
+    folder = os.path.abspath(folder.rstrip('/'))
+    tag = source or folder
+    base = f"{datetime.datetime.now():%Y.%m.%d} - {os.path.basename(folder) or 'cull'}" \
+           + (" selection" if source else "")
+    os.makedirs(DEFAULT_RECORDS, exist_ok=True)
+    name, n = base, 1
+    while True:
+        marker = os.path.join(DEFAULT_RECORDS, f"{name} - source.txt")
+        if not os.path.exists(marker):
+            with open(marker, "w") as fh:
+                fh.write(tag + "\n")
+            return name
+        same = open(marker).read().strip() == tag
+        applied = os.path.exists(os.path.join(DEFAULT_RECORDS, f"{name} - log.csv"))
+        if same and not applied:
+            return name                      # same source, job still open: reuse
+        n += 1
+        name = f"{base} ({n})"
+
+
+def find_open_job(folder):
+    """The job for this folder that has a plan but no log yet, newest first.
+
+    `--apply` needs this because job names carry the date: a plan made last
+    night must still be applyable this morning, and applying must never mint a
+    fresh (empty) job marker of its own.
+    """
+    folder = os.path.abspath(folder.rstrip('/'))
+    hits = []
+    if not os.path.isdir(DEFAULT_RECORDS):
+        return None
+    for f in os.listdir(DEFAULT_RECORDS):
+        if not f.endswith(" - source.txt"):
+            continue
+        name = f[:-len(" - source.txt")]
+        try:
+            src = open(os.path.join(DEFAULT_RECORDS, f)).read().strip()
+        except OSError:
+            continue
+        if (src == folder
+                and os.path.exists(os.path.join(DEFAULT_RECORDS, f"{name} - plan.csv"))
+                and not os.path.exists(os.path.join(DEFAULT_RECORDS, f"{name} - log.csv"))):
+            hits.append(name)
+    return max(hits) if hits else None
+
+
+def retire_stale_plans(folder, keep):
+    """A fresh analysis supersedes any older unapplied plan for the same folder.
+
+    The old plan is renamed, not removed, so `--apply` can never act on stale
+    analysis — dragging a folder in again means "look at it again", and only
+    the newest look can be applied.
+    """
+    folder = os.path.abspath(folder.rstrip('/'))
+    for f in os.listdir(DEFAULT_RECORDS):
+        if not f.endswith(" - source.txt"):
+            continue
+        name = f[:-len(" - source.txt")]
+        if name == keep:
+            continue
+        try:
+            src = open(os.path.join(DEFAULT_RECORDS, f)).read().strip()
+        except OSError:
+            continue
+        plan = os.path.join(DEFAULT_RECORDS, f"{name} - plan.csv")
+        log = os.path.join(DEFAULT_RECORDS, f"{name} - log.csv")
+        if src == folder and os.path.exists(plan) and not os.path.exists(log):
+            os.rename(plan, os.path.join(DEFAULT_RECORDS, f"{name} - plan (superseded).csv"))
+            print(f"note: an unapplied plan from {name.split(' - ')[0]} was superseded by this run")
+
+
+def apply_moves(folder, manifest, dest_root, thumbs_dir, job):
+    rows = [r for r in csv.DictReader(open(manifest)) if r["verdict"] == "REDUNDANT"]
+    keeper = {r["group"]: r["file"] for r in csv.DictReader(open(manifest)) if r["verdict"] == "KEEP"}
+    dest = os.path.join(dest_root, job)
+    os.makedirs(dest, exist_ok=True)
+    os.makedirs(thumbs_dir, exist_ok=True)
+    log = os.path.join(DEFAULT_RECORDS, f"{job} - log.csv")
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    moved = missing = failed = 0
+    freed = 0
+    with open(log, "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["moved_at", "from", "to", "why", "kept_instead", "MB"])
+        for n, r in enumerate(rows, 1):
+            progress(n, len(rows), "moving files")
+            src = os.path.join(folder, r["file"])
+            if not os.path.exists(src):
+                missing += 1
+                continue
+            dst = os.path.join(dest, r["file"])
+            try:
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                if os.path.exists(dst):
+                    base, ext = os.path.splitext(dst); k = 2
+                    while os.path.exists(f"{base} ({k}){ext}"):
+                        k += 1
+                    dst = f"{base} ({k}){ext}"
+                # keep a small record of what left, so it can be identified later
+                try:
+                    th = open_image(src).convert("RGB")
+                    th.thumbnail((320, 320))
+                    # keep the subfolder in the name, or 2019/IMG_1.jpg and
+                    # 2020/IMG_1.jpg silently overwrite each other's thumbnail
+                    tname = r["file"].replace(os.sep, "__") + ".jpg"
+                    th.save(os.path.join(thumbs_dir, tname), quality=70)
+                except Exception:
+                    pass
+                size = os.path.getsize(src)
+                try:
+                    os.rename(src, dst)                  # same volume: instant
+                except OSError:
+                    shutil.move(src, dst)                # different volume: copy
+                moved += 1; freed += size
+                w.writerow([now, src, dst, r["why"], keeper.get(r["group"], ""), r["MB"]])
+                # A photo's sidecar (edits, ratings) is useless without it: it
+                # travels along, and is logged so undo brings it back too. The
+                # same goes for a Live Photo's paired video — an orphaned .mov
+                # whose still was culled is junk the library would keep forever.
+                stem = os.path.splitext(src)[0]
+                for sc in (src + ".xmp", stem + ".xmp", stem + ".XMP",
+                           src + ".aae", stem + ".aae", stem + ".AAE",
+                           stem + ".mov", stem + ".MOV"):
+                    if os.path.exists(sc):
+                        sdst = os.path.join(os.path.dirname(dst),
+                                            os.path.basename(sc))
+                        kind = ("live photo video"
+                                if sc.lower().endswith(".mov") else "sidecar")
+                        try:
+                            try:
+                                os.rename(sc, sdst)
+                            except OSError:
+                                shutil.move(sc, sdst)
+                            w.writerow([now, sc, sdst, kind,
+                                        os.path.basename(src), ""])
+                        except Exception:
+                            pass
+            except Exception as e:
+                failed += 1
+                print("  failed:", r["file"], str(e)[:60])
+    # Applying is a judgement: the person saw the proof pairs and said yes.
+    # Those approvals accumulate in one file, as labelled data.
+    #
+    # Known unsound and unfixed: this records every shown pair as approved,
+    # including ones nobody looked at. Reviewing and applying are not the same
+    # act, and no mechanism inside the folder can tell them apart — see the
+    # wrong-direction note in docs/dead-ends.md.
+    shown = os.path.join(DEFAULT_RECORDS, f"{job} - shown.csv")
+    if os.path.exists(shown):
+        labels = os.path.join(DEFAULT_RECORDS, "labels.csv")
+        new = not os.path.exists(labels)
+        with open(labels, "a", newline="") as fh:
+            w = csv.writer(fh)
+            if new:
+                w.writerow(["date", "job", "keeper", "culled", "why",
+                            "margin", "kind", "judgement"])
+            for r in csv.DictReader(open(shown)):
+                w.writerow([now, job, r["keeper"], r["culled"], r["why"],
+                            r["margin"], r["kind"], "approved"])
+    extra = ""
+    if missing:
+        extra += f" \u00b7 {missing} already gone"
+    if failed:
+        extra += f" \u00b7 {failed} failed"
+    return moved, freed, extra
+
+
+def reset(no_prompt=False):
+    """Put every photograph back and clear everything the tool has produced.
+
+    For starting again from nothing: after a change to how culls are decided,
+    or simply to be sure that what a run reports was worked out from the
+    photographs rather than from something cached.
+
+    Everything cached goes: what was read from each photograph, every pairwise
+    verdict, every keypoint screen. That is the point — a run afterwards works
+    everything out again from the photographs, so what it reports cannot have
+    come from something stale.
+
+    Judgements are never deleted. Everything else here can be produced again
+    from the library, and a judgement cannot: it is somebody's opinion about
+    two photographs, and there is no way back to it except asking again.
+
+    Asks first, always. It moves photographs.
+    """
+    jobs = sorted(f[:-len(" - log.csv")] for f in os.listdir(DEFAULT_RECORDS)
+                  if f.endswith(" - log.csv")) if os.path.isdir(DEFAULT_RECORDS) else []
+    to_restore = 0
+    for job in jobs:
+        try:
+            to_restore += sum(1 for _ in csv.DictReader(
+                open(os.path.join(DEFAULT_RECORDS, f"{job} - log.csv"))))
+        except OSError:
+            pass
+
+    def weigh(path):
+        total = 0
+        for dp, _, fn in os.walk(path):
+            for f in fn:
+                try:
+                    total += os.path.getsize(os.path.join(dp, f))
+                except OSError:
+                    pass
+        return total
+
+    cache = os.path.join(WORKING_DIR, "Cache")
+    checks = DEFAULT_CHECKS
+    print(f"  {len(jobs)} applied job{'' if len(jobs) == 1 else 's'} to undo, "
+          f"{to_restore:,} photograph{'' if to_restore == 1 else 's'} to put back")
+    print(f"  {size_text(weigh(cache))} of cache \u2014 what was read from each "
+          f"photograph, every pairwise verdict, every keypoint screen")
+    print(f"  {size_text(weigh(checks))} of proof images")
+    print("  judgements are kept")
+    if not no_prompt:
+        print("  reset everything? [y]es  [n]o")
+        while True:
+            try:
+                k = read_key()
+            except (EOFError, KeyboardInterrupt):
+                print("\n  left alone")
+                return
+            if k == "n":
+                print("  left alone")
+                return
+            if k == "y":
+                break
+
+    for job in jobs:
+        print(f"\n● {job}")
+        undo(job, hint=False)      # the plan is about to be cleared too
+
+    # Only what a run produces is cleared, named exactly. Everything else in
+    # Records is somebody's judgement, or something unrecognised — and an
+    # unrecognised file is kept. Deleting what you cannot name is how evidence
+    # goes missing.
+    made_by_a_run = (" - plan.csv", " - log.csv", " - log (undone).csv",
+                     " - shown.csv", " - source.txt", " - settings.txt",
+                     " - thumbnails")
+    removed = 0
+    for f in sorted(os.listdir(DEFAULT_RECORDS)) if os.path.isdir(DEFAULT_RECORDS) else []:
+        if not any(f.endswith(suffix) for suffix in made_by_a_run):
+            continue
+        path = os.path.join(DEFAULT_RECORDS, f)
+        try:
+            shutil.rmtree(path) if os.path.isdir(path) else os.remove(path)
+            removed += 1
+        except OSError:
+            pass
+
+    for path in (cache, checks, DEFAULT_CULL):
+        if os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
+        os.makedirs(path, exist_ok=True)
+
+    refresh_dashboard()
+    print(f"\n  reset · {to_restore:,} photograph"
+          f"{'' if to_restore == 1 else 's'} back in place · "
+          f"{removed} run record{'' if removed == 1 else 's'} cleared · "
+          f"judgements kept")
+
+
+def rewind(job):
+    """Put a job's files back so the next round starts from a clean folder.
+
+    Used between rounds of the review loop, when the limit has just changed and
+    the plan is about to be re-applied. Every round re-applies from scratch
+    rather than trying to work out a delta: it is a rename per file on the same
+    volume, and "the folder is exactly what the current plan says" is an
+    invariant worth more than the saved I/O.
+
+    Distinct from `undo`, deliberately. An undo is a person retracting a cull,
+    so it retracts the approval too. This is one step of a decision still being
+    made, and the labels belong to whatever the person finally settles on.
+
+    The log is kept, numbered, never overwritten: what moved where stays on
+    record even for rounds that were superseded seconds later.
+    """
+    log = os.path.join(DEFAULT_RECORDS, f"{job} - log.csv")
+    if not os.path.exists(log):
+        return 0
+    rows = list(csv.DictReader(open(log)))
+    back = 0
+    for n, r in enumerate(rows, 1):
+        progress(n, len(rows), "putting back")
+        src, dst = r["to"], r["from"]
+        if not os.path.exists(src) or os.path.exists(dst):
+            continue
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        try:
+            os.rename(src, dst)
+        except OSError:
+            shutil.move(src, dst)
+        back += 1
+    k = 1
+    while os.path.exists(os.path.join(DEFAULT_RECORDS,
+                                      f"{job} - log (round {k}).csv")):
+        k += 1
+    os.rename(log, os.path.join(DEFAULT_RECORDS, f"{job} - log (round {k}).csv"))
+    prune_empty(os.path.join(DEFAULT_CULL, job))
+    return back
+
+
+def prune_empty(dest):
+    """Leave no empty scaffolding behind in Culled Photos.
+
+    A restore moves files out but not the directories they sat in, so an
+    emptied job folder would squat in Culled Photos looking like a job.
+    Finder drops `.DS_Store` into every folder it opens, which counts as
+    empty — it is the reason a large undo once left its whole
+    directory tree behind.
+    """
+    for dp, dn, fn in os.walk(dest, topdown=False):
+        entries = os.listdir(dp)
+        if all(e == ".DS_Store" for e in entries):
+            for e in entries:
+                try:
+                    os.remove(os.path.join(dp, e))
+                except OSError:
+                    pass
+            try:
+                os.rmdir(dp)
+            except OSError:
+                pass
+
+
+def undo(job, hint=True):
+    """Put every file a job moved back where it came from, from its log.
+
+    The log is the authority: each row records `from` and `to`. Afterwards the
+    log is renamed `log (undone).csv` — the history is kept, but the job counts
+    as open again, so the dashboard stops crediting it and the still-valid plan
+    could be re-applied.
+    """
+    log = os.path.join(DEFAULT_RECORDS, f"{job} - log.csv")
+    if not os.path.exists(log):
+        done = sorted(f[:-len(" - log.csv")] for f in os.listdir(DEFAULT_RECORDS)
+                      if f.endswith(" - log.csv"))
+        sys.exit("no log for a job called: " + job +
+                 ("\njobs that can be undone:\n  " + "\n  ".join(done) if done
+                  else "\nno applied jobs found."))
+    rows = list(csv.DictReader(open(log)))
+    restored = missing = occupied = 0
+    for n, r in enumerate(rows, 1):
+        progress(n, len(rows), "restoring files")
+        src, dst = r["to"], r["from"]          # reversed on purpose
+        if not os.path.exists(src):
+            missing += 1
+            continue
+        if os.path.exists(dst):
+            occupied += 1                       # never overwrite; report instead
+            continue
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        try:
+            os.rename(src, dst)
+        except OSError:
+            shutil.move(src, dst)
+        restored += 1
+    os.rename(log, os.path.join(DEFAULT_RECORDS, f"{job} - log (undone).csv"))
+    prune_empty(os.path.join(DEFAULT_CULL, job))
+    # An undo takes the approval back; the label record should say so rather
+    # than keep claiming those culls were endorsed.
+    labels = os.path.join(DEFAULT_RECORDS, "labels.csv")
+    shown = os.path.join(DEFAULT_RECORDS, f"{job} - shown.csv")
+    if os.path.exists(labels) and os.path.exists(shown):
+        with open(labels, "a", newline="") as fh:
+            w = csv.writer(fh)
+            stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            for r in csv.DictReader(open(shown)):
+                w.writerow([stamp, job, r["keeper"], r["culled"], r["why"],
+                            r["margin"], r["kind"], "retracted by undo"])
+    print(f"\n  restored {restored:,} of {len(rows):,}")
+    if missing:
+        print(f"  {missing:,} already gone")
+    if occupied:
+        print(f"  {occupied:,} skipped \u2014 something is already there")
+    if hint:
+        print("  the plan stands; --apply would redo the cull")
+    refresh_dashboard()
+
+
+def reveal(path):
+    """Open a folder in the platform's file browser; silent if impossible."""
+    try:
+        if sys.platform == "darwin":
+            subprocess.run(["open", path], capture_output=True)
+        elif sys.platform == "win32":
+            os.startfile(path)                       # noqa — Windows only
+        else:
+            subprocess.run(["xdg-open", path], capture_output=True)
+    except Exception:
+        pass
+
+
+def choose_folder(prompt):
+    """A native folder-picker dialog; None if unavailable or cancelled.
+
+    macOS gets AppleScript's chooser, Windows gets the PowerShell folder
+    dialog. Both have a New Folder button, so 'create it first' is not a
+    step the person has to know about.
+    """
+    safe = prompt.replace('"', "'")
+    try:
+        if sys.platform == "darwin":
+            r = subprocess.run(
+                ["osascript", "-e",
+                 'tell application "System Events" to activate',
+                 "-e", f'POSIX path of (choose folder with prompt "{safe}")'],
+                capture_output=True, text=True, timeout=600)
+            if r.returncode == 0 and r.stdout.strip():
+                return r.stdout.strip()
+        elif sys.platform == "win32":
+            ps = ("Add-Type -AssemblyName System.Windows.Forms; "
+                  "$d = New-Object System.Windows.Forms.FolderBrowserDialog; "
+                  f"$d.Description = '{safe}'; "
+                  "if ($d.ShowDialog() -eq 'OK') { Write-Output $d.SelectedPath }")
+            r = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                               capture_output=True, text=True, timeout=600)
+            if r.returncode == 0 and r.stdout.strip():
+                return r.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def refresh_dashboard():
+    """Keep the one-page picture in the working folder current after every run."""
+    try:
+        subprocess.run([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                     "dashboard.py")],
+                       capture_output=True, timeout=120)
+    except Exception:
+        pass
+
+
+def reclaimed_total():
+    """All-time GB in Cruller, from the logs. Small files; fast enough."""
+    gb = 0.0
+    try:
+        for f in os.listdir(DEFAULT_RECORDS):
+            if f.endswith(" - log.csv"):
+                for r in csv.DictReader(open(os.path.join(DEFAULT_RECORDS, f),
+                                              errors="replace")):
+                    try:
+                        gb += float(r.get("MB") or 0) / 1024
+                    except ValueError:
+                        pass
+    except OSError:
+        pass
+    return gb
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Find redundant photos and move them out. Nothing is deleted.")
+    ap.add_argument("folder", nargs="?")
+    ap.add_argument("--reset", action="store_true",
+                    help="undo every applied job and clear caches, proof images "
+                         "and plans; judgements are kept")
+    ap.add_argument("--undo", metavar="JOB",
+                    help='reverse an applied job from its log, by its name')
+    ap.add_argument("--files", metavar="LIST", default=None,
+                    help="judge only the files named in LIST, one path per line "
+                         "— how the app hands over a dropped selection")
+    ap.add_argument("--block", type=float, default=None)
+    ap.add_argument("--ratio", type=float, default=None)
+    ap.add_argument("--apply", action="store_true", help="move the redundant files out")
+    ap.add_argument("--cull-dir", default=None)
+    ap.add_argument("--checks", type=int, default=None,
+                    help="force a fixed number of proof images (default: the run "
+                         "decides — every close call plus 60 sampled; 0 for none)")
+    ap.add_argument("--hunt", nargs="?", type=int, const=100, default=None,
+                    metavar="N",
+                    help="write N pairs as blind sheets to sort into same/"
+                         "different. Moves nothing")
+    ap.add_argument("--no-prompt", action="store_true", help="never ask; just report")
+    ap.add_argument("--verbose", action="store_true",
+                    help="full diagnostics: thresholds, bands, verification stats")
+    a = ap.parse_args()
+
+    if a.reset:
+        if WORKING_DIR is None:
+            sys.exit("no working folder set yet, so there is nothing to reset")
+        reset(no_prompt=a.no_prompt)
+        return
+
+    if a.undo:
+        if WORKING_DIR is None:
+            sys.exit("no working folder configured; nothing to undo from.")
+        target = a.undo.strip()
+        # A path is as good as a name: --undo accepts what you would have
+        # dragged, so a name copied out of Finder works without editing.
+        if os.path.isdir(target):
+            job, _ = job_for_folder(os.path.abspath(target.rstrip('/')))
+            if job:
+                target = job
+        undo(target)
+        return
+    if not a.folder and not a.files:
+        ap.error("a folder is required (or --undo JOB, or --files LIST)")
+
+    sel = None
+    if a.files:
+        # A dropped selection of photos rather than a folder. The plan is made
+        # over exactly these files; their common parent stands in as the folder
+        # so every record and relpath works as usual.
+        if a.apply:
+            sys.exit("a selection is applied by answering y during its own run")
+        with open(a.files) as fh:
+            sel = [os.path.abspath(ln.rstrip("\n")) for ln in fh if ln.strip()]
+        sel = [p for p in sel if os.path.isfile(p)]
+        if not sel:
+            sys.exit("none of the dropped items are files that exist")
+        folder = os.path.commonpath([os.path.dirname(p) for p in sel])
+    else:
+        folder = os.path.abspath(a.folder.rstrip('/'))
+        if not os.path.isdir(folder):
+            sys.exit("no such folder: " + folder)
+        # Dropped a folder from inside the working folder? That is not a request
+        # to cull it. Usually it means "put this job back"; either way, culling
+        # the tool's own output would be wrong.
+        if WORKING_DIR is not None and undo_from_drop(folder, a.no_prompt):
+            return
+        if sift.is_library_package(folder):
+            sys.exit("that is a photo library managed by an app (Photos, Lightroom), not a\n"
+                     "folder of files. Culling inside it would corrupt the library.\n"
+                     "Export the photos to a plain folder first, then point Cruller at that.")
+    if WORKING_DIR is None:
+        # First run on this machine: ask once, remember it. One working
+        # folder, chosen before anything runs. A real folder dialog, because
+        # nobody should have to type a path to answer "where should this go?".
+        print("Cruller needs one folder for what it produces \u2014 culled photos,")
+        print("proof images and records. Never your library.")
+        wd = choose_folder("Choose Cruller's working folder — it will hold culled "
+                           "photos, proof images and records. Not your photo library.")
+        if not wd and sys.stdin.isatty():           # dialog unavailable or cancelled
+            wd = input("Working folder (will be created if needed): ").strip().rstrip(os.sep)
+        if not wd:
+            sys.exit("no working folder chosen; not running.")
+        wd = os.path.abspath(os.path.expanduser(wd))
+        os.makedirs(wd, exist_ok=True)
+        config.save_working(wd)
+        set_working(wd)
+        print(f"working folder: {wd}\n")
+    if a.cull_dir is None:
+        a.cull_dir = DEFAULT_CULL
+    wd = os.path.abspath(WORKING_DIR)
+    if sel:
+        inside = [p for p in sel if p == wd or p.startswith(wd + os.sep)]
+        if inside:
+            print(f"  ({len(inside)} dropped file{'' if len(inside)==1 else 's'} "
+                  f"live in the working folder — already culled, skipped)")
+            sel = [p for p in sel if p not in set(inside)]
+        if not sel:
+            sys.exit("everything dropped was already-culled output; nothing to do.")
+        folder = os.path.commonpath([os.path.dirname(p) for p in sel])
+    if folder == wd or folder.startswith(wd + os.sep):
+        sys.exit("that folder is inside the working folder — it holds files already "
+                 "culled,\nnot a library to cull. Nothing to do here.")
+    if wd.startswith(folder + os.sep):
+        # Scanning a parent of the working folder is how cross-folder redundancy
+        # is found — the tool's output just isn't part of the library.
+        print(f"  ({os.path.basename(wd)} is inside this tree; skipped)")
+    opts = dict(block=sift.DUP_BLOCK, ratio=sift.DUP_RATIO)
+    opts["auto"] = (a.block is None and a.ratio is None)
+    if a.block is not None: opts["block"] = a.block
+    if a.ratio is not None: opts["ratio"] = a.ratio
+    opts["quiet"] = not a.verbose
+    os.makedirs(DEFAULT_RECORDS, exist_ok=True)
+    # Applying resumes the job that planned — even if that was yesterday.
+    # Only analysing may start a new one; job_name() creates the marker.
+    if sel:
+        digest = hashlib.md5("\n".join(sorted(sel)).encode()).hexdigest()[:8]
+        job = job_name(folder, source=f"{folder} (selection {digest})")
+        fd, lst = tempfile.mkstemp(prefix="cruller_selection_", suffix=".txt")
+        with os.fdopen(fd, "w") as fh:
+            fh.write("\n".join(sel) + "\n")
+        opts["files"] = lst
+    else:
+        job = find_open_job(folder) if a.apply else job_name(folder)
+        if a.apply and not job:
+            sys.exit("no open plan for this folder — run without --apply first, "
+                     "and look at the proof images")
+        if not a.apply:
+            retire_stale_plans(folder, keep=job)   # re-dragging a folder = fresh look
+    opts["manifest"] = os.path.join(DEFAULT_RECORDS, f"{job} - plan.csv")
+    opts["checkdir"] = os.path.join(DEFAULT_CHECKS, job)
+    opts["huntdir"] = os.path.join(WORKING_DIR, "Close Calls", job)
+
+    print(f"\n\u25cf {os.path.basename(folder)}"
+          + (f" \u2014 a selection of {len(sel)} files" if sel else ""))
+    if a.verbose and not opts["auto"]:
+        print(f"  limit {opts['block']:.0f}/{opts['ratio']:.0f}, set by hand")
+    apply_hint = (f'apply with:  ./crull "{folder}" --apply' if not sel else
+                  "a selection applies when you answer y \u2014 drop the files "
+                  "again to redo")
+
+    if a.apply:
+        moved, freed, extra = apply_moves(
+            folder, opts["manifest"], a.cull_dir,
+            os.path.join(DEFAULT_RECORDS, job + " - thumbnails"), job)
+        refresh_dashboard()
+        print(f"  done \u00b7 {moved:,} moved \u00b7 {size_text(freed)} \u00b7 "
+              f"{os.path.basename(WORKING_DIR)} holds "
+              f"{reclaimed_total():.1f} GB{extra}")
+        return
+
+    interactive = sys.stdin.isatty() and not a.no_prompt
+    opts["no_summary"] = interactive and not a.hunt
+    session = analyse(folder, opts)
+    if a.hunt:
+        hunt(folder, opts, session, a.hunt)
+        return
+    dial = interactive and session is not None
+    n, total_pairs, kinds, n_mech = spot_checks(
+        folder, opts["manifest"], opts["checkdir"], 0 if dial else a.checks)
+    if not total_pairs and not (interactive and session):
+        if interactive:
+            wait_to_close("nothing redundant found")
+        return
+    if not n and total_pairs and (a.checks == 0 or not interactive):
+        # Only bow out when proof images were actually declined. A run whose
+        # culls are all mechanical — exact copies, resaves — produces no proofs
+        # to show but is still a decision the person should get to make, and
+        # would otherwise exit without ever offering the dial.
+        msg = f"cull {total_pairs:,}, no proof images \u00b7 {apply_hint}"
+        if interactive:
+            wait_to_close(msg)
+        else:
+            print(f"  {msg}")
+        return
+    if kinds.get("chain"):
+        print(f"  \u26a0 {kinds['chain']} chain \u2014 should be impossible")
+
+    if interactive and session is None:
+        # No options list is coming, so this is the only account of the run.
+        wait_to_close(f"cull {total_pairs:,} \u00b7 {apply_hint}")
+    elif interactive:
+        found = outcomes(session, opts["manifest"])
+        if not found:
+            print(f"  nothing to cull at any setting \u00b7 {apply_hint}")
+            return
+        at = None                             # nothing rendered until chosen
+
+        def settle(i):
+            """Re-decide at outcome i and rebuild what the person looks at."""
+            session["result"] = session["regroup"](*limits_at(found[i - 1][0]))
+            return spot_checks(folder, opts["manifest"], opts["checkdir"], a.checks)
+
+        applied = False
+        rebuilt = False
+        while True:
+            if rebuilt:
+                if n:
+                    reveal(opts["checkdir"])
+                elif total_pairs:
+                    # Every cull settled by rule, so there is nothing to judge.
+                    print(f"  all {total_pairs:,} settled by rule "
+                          f"\u2014 nothing to review")
+                rebuilt = False
+            red = [r for r in csv.DictReader(open(opts["manifest"]))
+                   if r["verdict"] == "REDUNDANT"]
+            size = sum(float(r["MB"] or 0) for r in red) * 1e6
+            choice = ask_next(found, session["files"], at, applied, size)
+
+            if choice == "quit":
+                if not applied:
+                    if at is None:
+                        # Leaving without picking: the plan on disk is whatever
+                        # the analysis used, which is not a setting anyone chose.
+                        print("  no setting chosen \u00b7 nothing moved")
+                    else:
+                        print(f'  kept \u00b7 {apply_hint}')
+                break
+
+            if choice == "apply":
+                moved, freed, extra = apply_moves(
+                    folder, opts["manifest"], a.cull_dir,
+                    os.path.join(DEFAULT_RECORDS, job + " - thumbnails"), job)
+                record_settings(job, session)
+                refresh_dashboard()
+                print(f"  done \u00b7 {moved:,} moved \u00b7 {size_text(freed)} \u00b7 "
+                      f"{os.path.basename(WORKING_DIR)} holds "
+              f"{reclaimed_total():.1f} GB{extra}")
+                applied = True
+                continue
+
+            # Undo and every move start alike: the photographs come back. They
+            # are a rename away, so changing your mind costs no rescan.
+            if applied:
+                rewind(job)
+                refresh_dashboard()
+                applied = False
+            if choice == "undo":
+                continue
+            at = int(choice[4:])
+            n, total_pairs, kinds, n_mech = settle(at)
+            rebuilt = True
+    else:
+        print(f'  review, then: {apply_hint}')
+
+
+def log_error():
+    """Put the traceback in a file and say one plain line on screen.
+
+    A stack trace answers a question nobody culling photographs is asking, and
+    it buries the one fact that matters: nothing was moved. The detail still
+    has to survive, so it goes to a log that can be read or sent on.
+    """
+    import datetime
+    import traceback
+    where = DEFAULT_RECORDS or os.path.dirname(os.path.abspath(__file__))
+    path = None
+    try:
+        os.makedirs(where, exist_ok=True)
+        path = os.path.join(where, "errors.log")
+        with open(path, "a") as fh:
+            fh.write("\n" + "=" * 72 + "\n")
+            fh.write(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S}  "
+                     f"{' '.join(sys.argv)}\n")
+            traceback.print_exc(file=fh)
+    except OSError:
+        path = None                       # nowhere to write; the line below still lands
+    print("\n  something went wrong \u2014 nothing was moved")
+    if path:
+        print(f"  the details are in {path}")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print()                           # a deliberate stop is not an error
+    except Exception:
+        log_error()
+        sys.exit(1)

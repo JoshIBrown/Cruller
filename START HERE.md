@@ -1,0 +1,303 @@
+# Running Cruller yourself
+
+## One-time setup
+
+Double-click **mac_install.command** in this folder. Re-run it after any change
+that mentions new libraries — it is safe to run as often as you like.
+
+If macOS refuses ("no permission", or nothing happens) — which occurs when the
+folder arrived via Dropbox or a download, both of which strip the run
+permission — open Terminal, type `bash ` (with the space), drag
+mac_install.command into the window, and press Enter. That works regardless, and
+the script then repairs the permissions on itself and on `crull` for good.
+
+One command: installs the Python libraries, builds `Cruller.app`, and checks
+that each library imports. You should see `numpy`, `PIL` and `cv2` reported as
+ok. HEIC support is optional — without it, iPhone HEIC files are skipped and
+the run says so.
+
+What the libraries are for, in case one ever needs attention:
+
+| Library | Needed for | Without it |
+|---|---|---|
+| `numpy` | **Required.** All image math — comparing photographs, ranking them, sharpness | The tool won't start |
+| `pillow` | **Required.** Reading JPEG/PNG/TIFF, raw previews, proof images | The tool won't start |
+| `opencv-python-headless` | **Required.** Aligning two frames and judging what changed — the core of every decision | Falls back to the coarse thumbnail test, which is what the 07-29 rewrite replaced. Install it |
+| `pillow-heif` | iPhone HEIC/HEIF photos | HEIC files are skipped, with a note in the run |
+
+The tool has one setting: the working folder, where everything it produces
+goes. The first time you run or drop anything, a folder dialog asks you to
+choose it (make a new folder right in the dialog if you like) — answered once,
+remembered in `scripts/settings.conf`. Clicking the Cruller.app icon with
+nothing dropped asks which folder of photos to look through, the same way.
+
+## Using it — the tested way
+
+Two commands per folder.
+
+**1. Look:**
+
+    ./crull "/path/to/some/photos"
+
+Changes nothing. Prints how many redundant files it found and where the proof
+images are.
+
+While it works you'll see a progress bar for each stage:
+
+    checking files         [################################] 100%  5,000/5,000
+    reading photos         [##########################------]  83%  4,150/5,000
+    comparing photos       [#########-----------------------]  28%  1,400/5,000   4m10s left
+    proof images           [################################] 100%  40/40
+
+Checking is fast — it recognises photos it has read before, so a folder you
+have run once mostly skips straight to comparing.
+
+Reading is the slow part on a big folder — roughly a thousand photos a minute
+for raws, faster for JPEGs. Comparing uses every core you have.
+
+**2. Review**, by opening that Spot Checks folder in Finder and arrowing
+through. Keeper on the left, the file it wants to move on the right.
+
+**You are shown the biggest differences first, and only so many.** Two rules
+decide what reaches you:
+
+1. **One pair per group — the member least like the keeper**, keeper on the
+   left, both frames at the same size so a difference on screen is a difference
+   in the photograph. If that pair is a fair cull then every other member of
+   its group is closer to the keeper still, so one pair settles the group.
+2. **Ordered by how different the two photographs actually are**, capped at 120
+   so the list stays reviewable in one sitting. Work down it and stop when it
+   stops being interesting — what remains below is more similar, not less
+   examined.
+
+**One menu, and you drive.** Before asking anything, the tool works out which
+settings give genuinely different answers, and offers those:
+
+        1   cull 48 of 200    24.0% of the folder    27 MB   12 to review
+        2   cull 50 of 200    25.0% of the folder    33 MB   19 to review
+        3   cull 51 of 200    25.5% of the folder   104 MB   24 to review
+        4   cull 54 of 200    27.0% of the folder   287 MB   38 to review
+        5   cull 60 of 200    30.0% of the folder   612 MB   57 to review
+      [1-5] review  ·  [q]uit
+
+One keypress, no Enter. **Nothing is rendered until you ask for it.** Press a
+number and that outcome is built — proof images made, Finder opened — and only
+then does `a` appear, to apply the one you are looking at. Nothing can be
+applied that you have not seen.
+
+Settings that give the same answer are never offered twice, so there is
+nothing in between to hunt for.
+
+Working out the list is quick even on a large folder: culling can only ever
+increase as the limit rises, so two settings that agree rule out everything
+between them, and the tool checks a handful of boundaries instead of every
+setting. Re-deciding then takes about a second, whatever the folder cost to
+read.
+
+The list is worth reading on its own. A folder that runs 48 to 60 across its
+entire range, as this one does, has almost nothing to find.
+
+**Moving the files does not end it.** After a cull the menu narrows:
+
+      412 moved · 14.2 GB
+      [u]ndo  [q]uit
+
+Undo puts them back and returns you to the list, still without re-reading a
+single photograph.
+
+Each round's log is kept and numbered, so what moved where stays on record even
+for rounds you replaced seconds later.
+
+The limit applies to this folder only. It is written into the job's records so
+you can see later what standard a cull was held to, and the next folder starts
+from the default again.
+
+**3. Move**, if you're happy:
+
+    ./crull "/path/to/some/photos" --apply
+
+Files go to `Culled Photos/<date> - <folder>` inside your working folder.
+Nothing is deleted. The
+dashboard refreshes itself. A culled photo's sidecar (`.xmp`, `.aae`) and its
+Live Photo video (`.mov`) travel with it and come back with `--undo`.
+
+Applying also records the pairs you reviewed in `Records/labels.csv`, and the
+limit that folder was judged at in `Records/<job> - settings.txt`, so a cull can
+always be traced back to the standard it was held to.
+
+Tip: instead of typing a path, type `./crull ` and then drag the folder from
+Finder into the Terminal window. It pastes the path, quoted correctly.
+
+## How it decides two photos are the same
+
+Every judgement is made by lining the two frames up — rotation, zoom and
+perspective, not just a shift — and then looking at what is left over, at a
+resolution where things you care about are still visible.
+
+That sounds obvious, and it is not what a naive comparison does. A naive one decides
+on a thumbnail 256 pixels wide. A face in a group shot is twenty pixels there,
+so two frames of the same person with completely different expressions measured
+**4.5% different** — well inside "identical". The same pair, lined up and read
+properly, measures **62%**.
+
+Two frames of the same person doing the same thing are still duplicates, and the
+redundant one still goes. That part has not changed.
+
+Most pairs never get that far. A thumbnail throws out anything nowhere near a
+match, then a keypoint check throws out anything that is not the same scene —
+neither of which opens the photograph at all. Only what survives both is read
+properly. That is what keeps a folder of bursts affordable.
+
+**When it can't line two frames up** — a bird against blank sky, an eclipse
+against black, anything too dark or too smooth to find landmarks in — it says so
+and keeps both. It would rather leave you two photos than cull on a guess.
+
+## Changed your mind?
+
+**Drag the job's folder out of `Culled Photos` and drop it on
+Cruller.app.** The tool recognises its own output, tells you what the job was
+and how many files it holds, and asks before putting anything back:
+
+    ● 2024.03 - Holiday
+      a finished job — 1,204 files (18.3 GB) can go back where they came from.
+      put 1,204 files back?  [y/n]
+
+Dropping a folder from *inside* one of those jobs works too — it finds the job
+it belongs to. One keypress answers it, and only `y` or `n` count — anything
+else is ignored rather than taken as an answer.
+
+By name, if you prefer typing:
+
+    ./crull --undo "<job name>"
+
+Either way it puts back everything that job moved, exactly where it came from,
+using the job's own log. Nothing is overwritten; anything that can't go back is
+reported. Run it with a wrong name and it lists the jobs that can be undone.
+
+## Checking its work
+
+    ./crull "/path/to/photos" --hunt
+
+Changes nothing, moves nothing. It analyses the folder, then writes **100
+numbered sheets** to `Cruller/Close Calls/<job>/`. Each sheet shows a pair of
+photographs whole, and underneath them **the exact spot where they differ most,
+at full size** — so you never have to search two photographs for a difference.
+
+The sheets are blind: no verdict, no score, and the numbering is shuffled so it
+tells you nothing. Sort them in Finder into the two folders provided:
+
+    same/         you cannot tell them apart at full size
+    different/    you can
+
+That sort is the ground truth this tool is tuned against. The pairs are drawn
+from the whole score range — confident culls, confident keeps, and everything
+between — so your answers map out exactly where your eye and the tool disagree.
+The answer key is written to `Records/` under the hunt's timestamp; don't look
+at it until you've sorted.
+
+Each hunt also appends its numbers to `Records/hunts.md`. The images are thrown
+away next run; the findings are not.
+
+## Anything else
+
+    ./crull --dashboard     refresh Cruller.html
+    ./crull --help
+
+
+## On Windows
+
+Same tool, two different starters: double-click **pc_install.bat** once (needs
+Python from python.org, with "Add to PATH" ticked during its install), then
+**drag a photo folder onto pc_crull.bat** — Windows treats that as running it on
+that folder. First run pops the working-folder dialog, same as Mac. Proof
+images open in Explorer; everything else is identical. No Cruller.app on
+Windows — the .bat file IS the drop target. (Built blind from a Mac; if
+anything misbehaves, say what it printed.)
+
+## The drag-and-drop version
+
+Drag a photo folder onto `Cruller.app` (built by `./mac_install.command`) and a Terminal
+window opens sized to the tool, cleared, and runs the cull there — progress
+bars, proof images, and the question before anything moves.
+
+**Dropping several folders at once** is fine: they queue and run one at a time
+in a single window. Drop more while it's running and they join the end.
+
+**Dropping loose files works too** — select any photos in Finder and drop the
+selection on the app. They are judged together as one set, named `<date> -
+<their folder> selection` in the records. One difference from a folder run: a
+selection is applied by answering `y` during its own run — to look again
+later, just drop the same files again. Anything dropped that isn't a photo is
+skipped with a note.
+
+**Dropping when nothing is running always starts fresh.** Tickets left behind
+by an interrupted session are discarded; only what you just dropped runs.
+
+**Dropping a folder from the working folder means undo**, never cull — see
+"Changed your mind?" above. The tool will not cull its own output.
+
+**Rebuilds are rarely needed.** The app runs the live scripts, so code changes
+reach it immediately; only a change to the drop-handling inside `mac_install.command`
+needs `./mac_install.command` re-run. You also get a macOS notification when a run
+finishes.
+
+## What a run looks like
+
+    ./crull "/some/folder"
+
+    ● 2020.01 - NYC
+      reading photos    [############--------------------]  38%  1,900/5,000   1m20s left
+      comparing photos  [################################] 100%  145/145      2m04s
+      working out options   4s
+      1   cull 18 of 145   12.4% of the folder   0.7 GB    6 to review
+      2   cull 23 of 145   15.9% of the folder   0.9 GB    8 to review
+      3   cull 31 of 145   21.4% of the folder   1.4 GB   14 to review
+      [1-3] review  ·  [q]uit
+      > 2
+      proof: 8 to review, 2 automatic · biggest difference first
+      [1-3] review  ·  [a]pply  ·  [q]uit
+      done · 23 moved · 0.9 GB · Photo Bin holds 12.4 GB
+
+The options come first; Finder opens with the proof images once you pick one.
+Every choice is a single keypress — no Enter. Quit and nothing happens; come
+back any time with `--apply`.
+
+**Nothing closes on its own.** A folder with no duplicates in it still waits
+for `q`, so a run can never flash past before you have read what it found.
+Dropped onto the app, the window closes once you have quit every folder in the
+queue.
+`--verbose` restores the full diagnostics when something needs debugging.
+
+## If something looks wrong
+
+Any proof image where the wrong photograph is being culled is worth acting on.
+Note the two filenames, then lower the limit: the review lists every distinct
+outcome the dial can produce, and a lower setting excludes that pair and
+everything like it.
+
+Nothing is at stake in getting it wrong the first time. `--undo` reverses an
+applied job completely — files, sidecars and videos alike.
+
+## Starting again from nothing
+
+    ./crull --reset
+
+Puts every photograph an applied job moved back where it came from, then clears
+everything the tool has produced: the cache, the proof images, the plans and
+logs. It asks first and tells you what it is about to do.
+
+Your judgements are never deleted, and neither is anything else it does not
+recognise — only the files a run itself produces. Everything cleared can be
+worked out again from your photographs; a judgement cannot.
+
+Worth doing after the tool changes how it decides, or any time you want to be
+sure a run's answer came from the photographs rather than from something
+remembered.
+
+## What it will not do
+
+- Delete anything. Ever. Emptying `Culled Photos` is your decision
+  alone, made in the Finder.
+- Touch the folder it scans, other than removing files you approved moving.
+- Judge that five distinct sunsets are redundant because you only need one.
+  That's taste, and it isn't trying.

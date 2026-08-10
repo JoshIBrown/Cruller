@@ -1,0 +1,103 @@
+#!/bin/bash
+#
+# crull — cull a folder of photos. Runs entirely on this Mac.
+#
+#   ./crull "/path/to/folder"           analyse: plan + spot checks, changes nothing
+#   ./crull "/path/to/folder" --apply   move the redundant files out
+#   ./crull --undo "<job name>"         put everything a job moved back
+#   ./crull --reset                     undo every job, clear every cache
+#   ./crull --dashboard                 refresh the one-page summary
+#   ./crull "/path/to/folder" --hunt    audit one run's culls; changes nothing
+#   ./crull --queue                     work through folders dropped on Cruller.app
+#
+# Everything lands in the working folder (scripts/settings.conf), never in the
+# folder being scanned. First-time setup: ./mac_install.command
+#
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PY="${PYTHON:-python3}"
+
+if ! "$PY" -c "import numpy, PIL" 2>/dev/null; then
+    echo "Missing dependencies — run ./mac_install.command once."
+    exit 1
+fi
+if ! "$PY" -c "import cv2" 2>/dev/null; then
+    echo "note: opencv not installed — scene verification will be skipped."
+    echo "      ./mac_install.command puts it in place."
+fi
+
+case "${1:-}" in
+  --dashboard) exec "$PY" "$HERE/scripts/dashboard.py" "${@:2}" ;;
+  --queue)
+      # Folders dropped on Cruller.app become tickets in .queue; work through
+      # them one at a time. Launched from the app, the window is cleared and
+      # sized to fit the tool; a manual terminal is left alone.
+      Q="$HERE/.queue"
+      mkdir -p "$Q"
+      if [ -n "${CRULLER_FROM_APP:-}" ]; then
+          printf '\e[8;20;100t'
+          clear
+          # Note which window this is while the shell is still alive: a tab's
+          # tty disappears the moment the shell exits, so it cannot be matched
+          # on afterwards, but the window id survives.
+          CRULLER_WIN="$(osascript -e 'tell application "Terminal"
+              repeat with w in windows
+                  try
+                      if tty of tab 1 of w is "'"$(tty)"'" then return id of w
+                  end try
+              end repeat
+              return ""
+          end tell' 2>/dev/null)"
+      fi
+      shopt -s nullglob
+      tickets=("$Q"/*.path "$Q"/*.paths)
+      if (( ${#tickets[@]} > 1 )); then
+          echo "${#tickets[@]} drops queued:"
+          for t in "${tickets[@]}"; do
+              case "$t" in
+                *.paths) echo "  a selection of $(grep -c . "$t") files" ;;
+                *)       echo "  $(cat "$t")" ;;
+              esac
+          done
+      fi
+      while :; do
+          items=("$Q"/*.path "$Q"/*.paths)
+          (( ${#items[@]} == 0 )) && break
+          ticket="${items[0]}"
+          case "$ticket" in
+            *.paths)
+                # A dropped selection of files, one path per line. The ticket
+                # moves out of the queue before the run so a crash cannot
+                # replay it.
+                LIST="$(mktemp -t cruller_selection)"
+                mv "$ticket" "$LIST"
+                "$PY" "$HERE/scripts/cull.py" --files "$LIST" || true
+                rm -f "$LIST" ;;
+            *)
+                folder="$(cat "$ticket")"
+                rm -f "$ticket"
+                [ -d "$folder" ] || { echo "skipping (not a folder): $folder"; continue; }
+                "$PY" "$HERE/scripts/cull.py" "$folder" || true ;;
+          esac
+      done
+      echo
+      echo "  queue empty"
+      # The app opened this window; close it again, by the id noted at the
+      # start. Detached and delayed, so the shell has exited first and Terminal
+      # sees nothing still running here to ask about.
+      if [ -n "${CRULLER_WIN:-}" ]; then
+          nohup osascript -e "delay 0.6" \
+              -e "tell application \"Terminal\" to close (every window whose id is $CRULLER_WIN) saving no" \
+              >/dev/null 2>&1 &
+          disown 2>/dev/null || true
+      fi
+      exit 0 ;;
+  "" | -h | --help)
+      # Test before stripping: sub() rewrites the line, so a rule that checked
+      # for a leading # afterwards fired on the line it had just stripped and
+      # quit after printing one.
+      awk 'NR>2 { if ($0 !~ /^#/) exit; sub(/^# ?/,""); print }' "$0"
+      exit 0 ;;
+esac
+
+exec "$PY" "$HERE/scripts/cull.py" "$@"
