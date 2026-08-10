@@ -126,6 +126,40 @@ time, because the grid still describes the picture coarsely however it is
 scaled. If the descriptor is being changed at all, the transform is the change
 worth making.
 
+## Scoring a pair on a high block instead of the worst one
+
+**The idea.** The score is the worst of about thirty thousand blocks, which is
+an extreme value. One region changing completely — somebody walking through a
+burst — makes the whole pair read as two different photographs, so a burst
+frame can never be culled at a gentle setting however alike the rest of it is.
+Measured on real burst pairs, the median block difference was 2% while the
+score was 75%. Ignoring the top fraction of a percent should let those through
+while still seeing anything larger.
+
+**What it found.** Against labelled pairs it works, and by a wide margin. With
+both limits refitted, scoring on the 99.9th block finds **97 of 200 wanted
+culls with no false culls, against 71** for the worst block. It is also
+steadier: dropping the single pair that constrains the limit moves it by 6%,
+where the worst block moves by 29%.
+
+**Why it went.** It culls a bird turning its head, and a small subject that
+changed. Neither is in the labelled set; both are guarded cases, found by eye,
+because they are the failures that matter. At the 99.9th block the small
+subject scores 12.3% with a texture ratio of 1.27 — no limit that leaves the
+tool useful protects it. Discarding the top blocks does not soften that
+evidence, it removes it: a small subject *is* a handful of extreme blocks.
+
+**The lesson worth keeping.** Labels and guarded cases are not
+interchangeable. A fit that optimises a labelled set can walk straight through
+a case the set does not contain, and the labelled set here is drawn from pairs
+the tool already flagged — so it is thin exactly where the guards are. Fitting
+anything against it must be checked against them.
+
+The tension is real and stands: the worst block protects the small subject and
+blocks the burst near-duplicate, and it cannot tell the two apart. Any fix has
+to separate "a small region changed" from "a small subject changed", which is a
+question about what is in the photograph.
+
 ## Sixteen-bit arithmetic for sharpness
 
 **The idea.** The Laplacian spans about −1020 to 1020, so it fits in a 16-bit

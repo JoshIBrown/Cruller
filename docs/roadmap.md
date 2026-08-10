@@ -17,6 +17,23 @@ Reviewing more of the worst-first list does not substitute for it: across the
 range one reviewer covered, their disagreement rate was flat — 13%, 10%, 13% by
 third — so the ranking carries no information about where disagreements are.
 
+## A burst frame where anything moved cannot be culled gently
+
+A pair is scored on its worst block of about thirty thousand, so one region
+changing completely sets the score for the whole pair. Measured on real burst
+frames a second apart: the median block difference is 2% — over almost all of
+the frame they are the same photograph — while the score is 75%, because
+somebody moved.
+
+That is the measure doing its job. Fine blocks and a maximum were chosen so a
+changed expression could not be averaged away, and it works: a coarse grid
+scored that at 4.5% and hid it. The cost is that a burst where anything at all
+moved reads as two different photographs.
+
+Scoring on a high block rather than the worst one was measured and refused —
+see the dead ends. Separating the two cases needs to know whether the small
+thing that changed is a subject, which is a question about content.
+
 ## Strongly recomposed copies
 
 The cheap sketch cannot see that two frames are the same scene when one has
