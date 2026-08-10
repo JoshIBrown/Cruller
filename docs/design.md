@@ -184,9 +184,9 @@ Rather than asking you to guess a number, a run offers five settings as a
 list: how many photographs each would cull, what share of the folder that is,
 and how much space it frees. Every one of them has something to look at.
 
-**The list comes first and nothing is rendered until you choose.** Proof
-images are built only for the outcome you choose to review, and only then can that
-outcome be applied — so nothing is ever applied that has not been looked at.
+**The list comes first and nothing is rendered until you choose.** The review
+is built only for the outcome you choose, and only that outcome can be applied
+— so nothing is ever applied that has not been looked at.
 
 **How the options are chosen.** The dial runs from 0 to 100, but most settings
 answer the same as their neighbour, and the interesting ones bunch at the low
@@ -216,10 +216,51 @@ candidate set again — about ten seconds on a folder of a thousand photographs 
 so the count is the cost. Searching for exact boundaries instead took
 seventeen settings to offer the same five.
 
+## The review
+
+Choosing a setting opens a page in the browser holding **every cull that
+setting would make** — the keeper on the left, the frame leaving on the right,
+at the same size, so a difference on screen is a difference in the photograph.
+Nothing is certain enough to leave out. A relationship the tool can prove is
+still a photograph leaving, and a proof nobody looked at is only a claim.
+
+Pairs are ordered most different first, so the least confident call is read
+first and the list gets safer as it goes. A pair whose difference could not be
+measured leads all of them: not knowing is the least confident state there is.
+
+**A page rather than a folder of images.** Images in a folder can only be
+looked at, so the only answer they admit is agreeing or disagreeing with the
+whole plan at once, and a disagreement about one pair has nowhere to go. Each
+pair here carries its own two answers:
+
+- **Refuse the cull**, with a reason. The frame stays; the plan is otherwise
+  untouched.
+- **Turn it round.** The frame on the right becomes the keeper.
+
+**Turning round is a statement about a group, not a pair.** A group has one
+keeper and every other member is judged against it, so one keeper can appear in
+several pairs — in a typical folder, a third of groups hold more than one cull.
+Saying the wrong frame was chosen therefore moves the whole group: the named
+frame becomes the keeper and the old keeper joins the culls. Two such answers
+in one group would ask for two keepers, so the page allows one, and the plan
+rewrite ignores a second if one ever arrives.
+
+**Refusing does not.** A refused cull simply stays, which leaves its group with
+two frames kept and the rest still judged against the keeper that remains —
+coherent, because the frame they were compared to is still there.
+
+**Both buttons record everything.** Applying acts on the answers; quitting
+moves nothing and hands back the settings list, which is what five settings are
+for. Either way every judgement is written down, and passes accumulate rather
+than overwrite: looking at one setting and then another is two opinions about
+the same folder, and the second does not cancel the first. An opinion about two
+photographs is the one thing in a run that cannot be worked out again.
+
 ## Culls decided by rule
 
-Some relationships are provable rather than judged, and those are culled
-without being shown for review:
+Some relationships are provable rather than judged. They are still shown —
+a proof nobody looked at is only a claim — but they are grouped on evidence
+rather than on a measured difference:
 
 - **Identical picture** — the decoded images match exactly.
 - **Smaller copy** — the same picture at lower resolution.
@@ -266,11 +307,19 @@ already thought marginal; it says nothing about the rest, and a reviewer's
 disagreement rate measured across such a list came out flat — 13%, 10%, 13% by
 third — so the ordering carries no information about where mistakes are.
 
-So the error rate comes from a separate draw: photographs taken uniformly at
-random from the culls a setting would make, judged blind, with the answer key
-held back until afterwards. Thirty gives a range about ten points wide, a
-hundred about six. Anything else — including "the reviewer approved these
-sheets" — is a number about the sample rather than about the plan.
+It is also the wrong exercise to count. Reviewing a plan means being told
+which frame the tool chose every time, and a judgement made after being told
+is not a judgement of the tool.
+
+So the error rate comes from a separate draw: culls taken uniformly at random
+from what a setting would move, shown with the answers covered — no labels, no
+filenames, and the side each frame lands on decided by a coin, so the layout
+itself gives nothing away. Thirty gives a range about ten points wide, a
+hundred about six. The interval is Wilson's, which behaves at small counts and
+near-zero rates, where the textbook interval returns a negative lower bound.
+
+Anything else — including "the reviewer approved the review" — is a number
+about the sample rather than about the plan.
 
 ## Safety
 
@@ -281,7 +330,7 @@ sheets" — is a number about the sample rather than about the plan.
 - **Photo library packages are never entered.** A managed library is a
   database, not a folder of files.
 - **The tool never writes into the folder it is scanning.** Everything it
-  produces — plans, logs, proof images, moved files — goes to a working folder
+  produces — plans, logs, reviews, moved files — goes to a working folder
   chosen once, on first run.
 - **No alignment, no cull.** A pair too dark or too flat to align reliably is
   kept, both frames.

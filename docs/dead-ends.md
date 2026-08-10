@@ -215,16 +215,21 @@ frame.
 act on them.
 
 **Why it went.** It writes into the library being scanned, which the tool
-otherwise never does, and proof images answer the same question better without
+otherwise never does, and the review answers the same question better without
 modifying anything.
 
-## Letting a review sheet vote
+## Letting a sample of the review vote
 
-**The idea.** Present proof images, let the reviewer delete the ones they
-disagree with, and apply the rest.
+**The idea.** Show a subset of the culls, let the reviewer throw out the ones
+they disagree with, and apply the rest untouched.
 
-**Why it went.** Reviewed sheets are a fraction of the culls in a plan, and
-they are chosen worst-first, so deleting a sheet says nothing about the
-unreviewed majority. It offered the feeling of control over a decision that had
-not actually been examined. A random audit answers the underlying question
-honestly; a veto does not.
+**Why it went.** A subset chosen worst-first says nothing about the majority
+nobody looked at, so throwing one out offered the feeling of control over a
+decision that had not actually been examined.
+
+**What replaced it.** Not a smaller veto but a complete review: every cull in
+the plan is shown, and each one can be refused or turned round on its own. A
+veto is sound exactly when there is nothing behind it that was never seen. The
+question the sample was standing in for — how often is the tool wrong — is
+answered separately by a blind random audit, because a review where you are
+told the answer each time cannot measure the answerer.

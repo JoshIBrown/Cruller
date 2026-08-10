@@ -21,7 +21,7 @@ What the libraries are for, in case one ever needs attention:
 | Library | Needed for | Without it |
 |---|---|---|
 | `numpy` | **Required.** All image math — comparing photographs, ranking them, sharpness | The tool won't start |
-| `pillow` | **Required.** Reading JPEG/PNG/TIFF, raw previews, proof images | The tool won't start |
+| `pillow` | **Required.** Reading JPEG/PNG/TIFF, raw previews, review images | The tool won't start |
 | `opencv-python-headless` | **Required.** Aligning two frames and judging what changed — the core of every decision | Falls back to the coarse thumbnail test, which is what the 07-29 rewrite replaced. Install it |
 | `pillow-heif` | iPhone HEIC/HEIF photos | HEIC files are skipped, with a note in the run |
 
@@ -39,15 +39,14 @@ Two commands per folder.
 
     ./crull "/path/to/some/photos"
 
-Changes nothing. Prints how many redundant files it found and where the proof
-images are.
+Changes nothing on its own. It works out what it would move, then hands you
+the settings and the review.
 
 While it works you'll see a progress bar for each stage:
 
     checking files         [################################] 100%  5,000/5,000
     reading photos         [##########################------]  83%  4,150/5,000
     comparing photos       [#########-----------------------]  28%  1,400/5,000   4m10s left
-    proof images           [################################] 100%  40/40
 
 Checking is fast — it recognises photos it has read before, so a folder you
 have run once mostly skips straight to comparing.
@@ -55,20 +54,34 @@ have run once mostly skips straight to comparing.
 Reading is the slow part on a big folder — roughly a thousand photos a minute
 for raws, faster for JPEGs. Comparing uses every core you have.
 
-**2. Review**, by opening that Spot Checks folder in Finder and arrowing
-through. Keeper on the left, the file it wants to move on the right.
+**2. Review**, in a page that opens in your browser.
 
-**Every photograph it would move gets a pair**, keeper on the left, both
-frames at the same size so a difference on screen is a difference in the
-photograph. A group of six shows five pairs, because five photographs are
-leaving and each is its own decision — and that includes the ones the tool can
-prove are copies, since a proof you have never looked at is only a claim.
+**Every photograph it would move gets a pair**, the keeper on the left and the
+one leaving on the right, both frames at the same size so a difference on
+screen is a difference in the photograph. A group of six shows five pairs,
+because five photographs are leaving and each is its own decision — and that
+includes the ones the tool can prove are copies, since a proof you have never
+looked at is only a claim.
 
 **Ordered by how different the two photographs actually are**, most different
 first. Work down and stop when it stops being interesting: what remains below
 is more alike, not less examined. A pair whose difference could not be measured
-comes first of all, because not knowing is the least confident state there
-is.
+comes first of all, because not knowing is the least confident state there is.
+
+**Every pair can be answered on its own.** Under each one:
+
+- **Do not cull this**, with a reason if you want to leave one. That frame
+  stays and nothing else changes.
+- **Wrong way round** — the frame on the right becomes the keeper instead. One
+  keeper often stands for several frames, and the page says so when it does;
+  turning a pair round moves the whole group, so only one per group can be
+  turned.
+
+Click either photograph to open it larger.
+
+At the bottom: **Apply the rest** moves everything you did not refuse, and
+**Quit** moves nothing and hands you back the settings. Both close the page,
+and both write down every judgement you made.
 
 **One menu, and you drive.** Before asking anything, the tool works out which
 settings give genuinely different answers, and offers those:
@@ -81,8 +94,7 @@ settings give genuinely different answers, and offers those:
       [1-5] review  ·  [q]uit
 
 One keypress, no Enter. **Nothing is rendered until you ask for it.** Press a
-number and that outcome is built — proof images made, Finder opened — and only
-then does `a` appear, to apply the one you are looking at. Nothing can be
+number and that outcome is built and opened in the review page. Nothing can be
 applied that you have not seen.
 
 Applying finishes the folder. Drop several at once and it moves straight to the
@@ -102,16 +114,12 @@ read.
 The list is worth reading on its own. A folder that runs 48 to 60 across its
 entire range, as this one does, has almost nothing to find.
 
-**Moving the files does not end it.** After a cull the menu narrows:
+**Applying finishes the folder**, so a queue of them moves straight to the
+next rather than asking to be let past each one. Changing your mind is one
+gesture afterwards: `--undo`, or drop the job's folder from `Culled Photos`
+back on the app.
 
-      412 moved · 14.2 GB
-      [u]ndo  [q]uit
-
-Undo puts them back and returns you to the list, still without re-reading a
-single photograph.
-
-Each round's log is kept and numbered, so what moved where stays on record even
-for rounds you replaced seconds later.
+Each job's log is kept and numbered, so what moved where stays on record.
 
 The limit applies to this folder only. It is written into the job's records so
 you can see later what standard a cull was held to, and the next folder starts
@@ -184,9 +192,10 @@ reported. Run it with a wrong name and it lists the jobs that can be undone.
     ./crull "/path/to/photos" --hunt
 
 Changes nothing, moves nothing. It analyses the folder, then writes **100
-numbered sheets** to `Cruller/Close Calls/<job>/`. Each sheet shows a pair of
-photographs whole, and underneath them **the exact spot where they differ most,
-at full size** — so you never have to search two photographs for a difference.
+numbered sheets** to `Close Calls/<job>/` in your working folder. Each sheet
+shows a pair of photographs whole, and underneath them **the exact spot where
+they differ most, at full size** — so you never have to search two photographs
+for a difference.
 
 The sheets are blind: no verdict, no score, and the numbering is shuffled so it
 tells you nothing. Sort them in Finder into the two folders provided:
@@ -214,8 +223,8 @@ away next run; the findings are not.
 Same tool, two different starters: double-click **pc_install.bat** once (needs
 Python from python.org, with "Add to PATH" ticked during its install), then
 **drag a photo folder onto pc_crull.bat** — Windows treats that as running it on
-that folder. First run pops the working-folder dialog, same as Mac. Proof
-images open in Explorer; everything else is identical. No Cruller.app on
+that folder. First run pops the working-folder dialog, same as Mac. The review
+opens in your default browser; everything else is identical. No Cruller.app on
 Windows — the .bat file IS the drop target. (Built blind from a Mac; if
 anything misbehaves, say what it printed.)
 
@@ -223,7 +232,7 @@ anything misbehaves, say what it printed.)
 
 Drag a photo folder onto `Cruller.app` (built by `./mac_install.command`) and a Terminal
 window opens sized to the tool, cleared, and runs the cull there — progress
-bars, proof images, and the question before anything moves.
+bars, the settings, and the review page before anything moves.
 
 **Dropping several folders at once** is fine: they queue and run one at a time
 in a single window. Drop more while it's running and they join the end.
@@ -257,15 +266,18 @@ finishes.
       1   cull 18 of 145   12.4% of the folder   0.7 GB
       2   cull 23 of 145   15.9% of the folder   0.9 GB
       3   cull 31 of 145   21.4% of the folder   1.4 GB
-      [1-3] review  ·  [q]uit
+      4   cull 44 of 145   30.3% of the folder   1.9 GB
+      5   cull 51 of 145   35.2% of the folder   2.2 GB
+      [1-5] review  ·  [q]uit
       > 2
-      23 proof images · most different first
-      [1-3] review  ·  [a]pply  ·  [q]uit
-      done · 23 moved · 0.9 GB · Photo Bin holds 12.4 GB
+      review open in your browser — http://127.0.0.1:52118/index.html
+      you refused 2 · turned 1 round
+      done · 21 moved · 0.8 GB · Photo Bin holds 12.4 GB
 
-The options come first; Finder opens with the proof images once you pick one.
-Every choice is a single keypress — no Enter. Quit and nothing happens; come
-back any time with `--apply`.
+The options come first; the review page opens once you pick one. The choice of
+setting is a single keypress — no Enter — and everything after that happens in
+the page. Quit it and nothing moves; you are back at the settings, free to look
+at another one.
 
 **Nothing closes on its own.** A folder with no duplicates in it still waits
 for `q`, so a run can never flash past before you have read what it found.
@@ -275,10 +287,11 @@ queue.
 
 ## If something looks wrong
 
-Any proof image where the wrong photograph is being culled is worth acting on.
-Note the two filenames, then lower the limit: the review lists every distinct
-outcome the dial can produce, and a lower setting excludes that pair and
-everything like it.
+Any pair where the wrong photograph is being culled can be answered on the
+spot — *Wrong way round* to keep the other frame, or *Do not cull this* to keep
+both. If a whole setting is culling too freely, quit back to the settings and
+take a lower one: the list covers every distinct outcome the dial can produce,
+and a lower setting excludes that pair and everything like it.
 
 Nothing is at stake in getting it wrong the first time. `--undo` reverses an
 applied job completely — files, sidecars and videos alike.
@@ -288,7 +301,7 @@ applied job completely — files, sidecars and videos alike.
     ./crull --reset
 
 Puts every photograph an applied job moved back where it came from, then clears
-everything the tool has produced: the cache, the proof images, the plans and
+everything the tool has produced: the cache, the review pages, the plans and
 logs. It asks first and tells you what it is about to do.
 
 Your judgements are never deleted, and neither is anything else it does not
@@ -303,24 +316,23 @@ remembered.
 
     ./crull "/some/folder" --audit
 
-Draws thirty culls at random from what the run would move and writes them as
-numbered sheets — both frames whole, and underneath, the exact spot they differ
-most, cropped from the originals at full size. The sheets carry a number and
-nothing else, and the answer key goes to Records, so nothing tells you what the
-tool decided before you have looked.
+Draws thirty culls at random from what the run would move and shows them in the
+same page, with the answers covered: no labels, no filenames, and the side each
+frame lands on decided by a coin. For each pair you say **the same photograph**
+or **different photographs**; different means the cull was wrong.
 
-Sort each sheet into `same/` or `different/`. Same means you cannot tell them
-apart and the cull was fair; different means it was wrong. Then:
+Press *Done* and it reports how many were wrong and the range the true rate
+lies in.
 
-    ./crull --audit-result
+**Why a separate exercise.** Reviewing a whole plan tells you what that folder
+needs, but not how often the tool is wrong — by the end you have seen which
+frame it chose every time, and cannot unsee it.
 
-which reports how many were wrong and the range the true rate lies in.
-
-**Why at random, and why blind.** The review shows the biggest differences
-first, so reviewing more of it tells you about the pairs the tool already
-thinks are marginal, not about the rest. Only an even draw from the whole plan
-answers "of the photographs this would move, how many should not be". Thirty
-gives a range about ten points wide, a hundred about six.
+**Why at random.** The review shows the biggest differences first, so working
+through more of it tells you about the pairs the tool already thinks are
+marginal, not about the rest. Only an even draw from the whole plan answers "of
+the photographs this would move, how many should not be". Thirty gives a range
+about ten points wide, a hundred about six.
 
 ## What it will not do
 

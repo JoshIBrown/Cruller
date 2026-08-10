@@ -72,7 +72,7 @@ def main():
                  "('working folder = /path'), or set CRULLER_DIR.")
     records = os.path.join(a.working, "Records")
     culled = os.path.join(a.working, "Culled Photos")
-    checks = os.path.join(a.working, "Spot Checks")
+    checks = os.path.join(a.working, "Reviews")
     jobs = read_jobs(records, culled) if os.path.isdir(records) else []
 
     total_files = sum(j["files"] for j in jobs)
@@ -133,7 +133,7 @@ def main():
   <div class="card accent"><div class="big">{gb(total_bytes)}</div><div class="lbl">reclaimed</div></div>
   <div class="card"><div class="big">{total_files:,}</div><div class="lbl">files culled</div></div>
   <div class="card"><div class="big">{len(jobs)}</div><div class="lbl">jobs run</div></div>
-  <div class="card"><div class="big">{n_checks:,}</div><div class="lbl">proof images</div></div>
+  <div class="card"><div class="big">{n_checks:,}</div><div class="lbl">reviews on file</div></div>
 </div>
 
 <h2>Jobs</h2>

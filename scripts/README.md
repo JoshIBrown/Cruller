@@ -9,7 +9,8 @@ measurements behind them, and what was tried and rejected — see
 
 | | |
 |---|---|
-| `cull.py` | The command: arguments, the review loop, applying, undoing, reset. Owns everything a person sees |
+| `cull.py` | The command: arguments, the settings list, applying, undoing, reset, the blind audit |
+| `review.py` | The review page: every cull side by side, answered one at a time, served locally |
 | `sift.py` | The engine: reads a folder, finds candidates, groups them, ranks each group, writes the plan |
 | `verify.py` | One question answered well — are these two frames the same photograph? Alignment and the residual |
 | `loaders.py` | Reading pictures and metadata across formats, including raws without demosaicing |
@@ -30,8 +31,10 @@ writes it for you.
    `verify.compare`, which aligns the two frames and measures what is left.
 5. Survivors are grouped around a keeper chosen by the ranking ladder, and the
    result is written as a plan: one row per file, with its verdict and why.
-6. `cull.py` offers the outcomes the dial can produce, renders proof images for
-   the one chosen, and — only if asked — moves files and writes a log.
+6. `cull.py` offers the outcomes the dial can produce; `review.py` shows the
+   one chosen as a page and returns what the person decided about each cull.
+7. `cull.py` rewrites the plan to match those answers and — only if asked —
+   moves files and writes a log.
 
 ## Invariants
 
@@ -55,9 +58,11 @@ a shortcut.
 kept, both frames. A crash during comparison is not a verdict: it is counted
 and reported, never cached.
 
-**A cull that skips review must prove derivation.** Reasons resting on file
-properties — a raw beside a JPEG, fewer pixels, a coarser quantization table —
-must also show the two pictures agree. Otherwise the pair is judged and shown.
+**Every cull is shown, and a label claiming derivation must prove it.** Reasons
+resting on file properties — a raw beside a JPEG, fewer pixels, a coarser
+quantization table — must also show the two pictures agree, or the pair is
+labelled a plain near-duplicate. The label never decides whether a person sees
+the pair; it only records what kind of relationship was found.
 
 **The residual is measured both ways.** Warping softens the frame being moved,
 so the answer depends on which frame is named first. The larger difference
@@ -80,12 +85,13 @@ RANSAC is seeded inside a lock, so a fit cannot depend on what else is running.
 
 ## What a run writes
 
-    Culled Photos/<job>/      what was moved, original structure kept
-    Spot Checks/<job>/        proof images: keeper beside what it replaces
-    Records/<job> - plan.csv  every file, its verdict, its group, and why
-    Records/<job> - log.csv   what moved where; the authority for undo
-    Records/labels.csv        cumulative judgements: approved, or retracted
-    Cache/probe.db            what was read, every verdict, every screen
+    Culled Photos/<job>/        what was moved, original structure kept
+    Reviews/<job>/              the review page and its images
+    Records/<job> - plan.csv    every file, its verdict, its group, and why
+    Records/<job> - review.csv  what the person said about each cull, and why
+    Records/<job> - log.csv     what moved where; the authority for undo
+    Records/labels.csv          cumulative judgements: approved, or retracted
+    Cache/probe.db              what was read, every verdict, every screen
 
 A job is named for its date and source folder, so two runs over one folder on
 one day are numbered rather than overwriting each other. The plan is authority

@@ -682,7 +682,7 @@ def classify(keeper, other, v=None, dt=None):
     return "near-duplicate"
 
 
-# Said about the file being culled, because that is the question a proof image
+# Said about the file being culled, because that is the question the review
 # has to answer: what is wrong with the one on the right. Same order as the
 # keeper rule, so these cannot drift apart from it.
 INFERIOR_REASONS = ("not the raw", "fewer pixels", "less metadata",

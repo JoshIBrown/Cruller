@@ -6,7 +6,7 @@ Analyse a folder, find files that are redundant against a better copy of the
 same picture, show you proof, and on a second run move them out. No AI, no
 conversation. Nothing is ever deleted.
 
-    python3 cull.py "/path/to/folder"                  # analyse: manifest + proof images
+    python3 cull.py "/path/to/folder"                  # analyse, then review every cull
     python3 cull.py "/path/to/folder" --apply          # move the redundant files out
 
 Two runs by design. The first changes nothing and leaves you a SpotCheck folder
@@ -29,6 +29,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from loaders import open_image
+import review
 import sift
 from sift import progress
 
@@ -41,7 +42,7 @@ def set_working(wd):
     global WORKING_DIR, DEFAULT_CULL, DEFAULT_CHECKS, DEFAULT_RECORDS
     WORKING_DIR = wd
     DEFAULT_CULL = os.path.join(wd, "Culled Photos")
-    DEFAULT_CHECKS = os.path.join(wd, "Spot Checks")
+    DEFAULT_CHECKS = os.path.join(wd, "Reviews")
     DEFAULT_RECORDS = os.path.join(wd, "Records")
 
 
@@ -55,7 +56,7 @@ def job_for_folder(folder):
     Dragging a folder out of `Culled Photos` onto the app plainly means "put
     this back", not "cull the culled photos again". The test is structural rather than
     a guess about contents: the folder must sit under the working folder, in
-    `Culled Photos` or `Spot Checks`, and its job name must have a record.
+    `Culled Photos` or `Reviews`, and its job name must have a record.
 
     Returns (job, state) where state is one of `undoable`, `already undone`,
     `no record`, or (None, reason) when the folder is somewhere else entirely.
@@ -69,7 +70,7 @@ def job_for_folder(folder):
     if os.path.commonpath([wd, here]) != wd:
         return None, None                      # an ordinary folder of photos
     rel = os.path.relpath(here, wd).split(os.sep)
-    if rel[0] not in ("Culled Photos", "Spot Checks"):
+    if rel[0] not in ("Culled Photos", "Reviews"):
         return None, f"inside the working folder ({rel[0]})"
     if len(rel) < 2:
         return None, rel[0]                    # the container, not one job
@@ -89,7 +90,7 @@ def undo_from_drop(folder, no_prompt=False):
     """
     job, state = job_for_folder(folder)
     if job is None:
-        if state in ("Culled Photos", "Spot Checks"):
+        if state in ("Culled Photos", "Reviews"):
             jobs = sorted(f[:-len(" - log.csv")] for f in os.listdir(DEFAULT_RECORDS)
                           if f.endswith(" - log.csv")) if DEFAULT_RECORDS and \
                 os.path.isdir(DEFAULT_RECORDS) else []
@@ -511,7 +512,7 @@ def _log_hunt(stamp, folder, picked, limit, judged):
         pass
 
 
-def hunt(folder, opts, session, top=100, uniform=False):
+def hunt(folder, opts, session, top=100):
     """Turn a run into a blind sorting exercise. Moves nothing, changes nothing.
 
     The goal: lose every pair a reviewer cannot tell apart, keep every
@@ -532,12 +533,6 @@ def hunt(folder, opts, session, top=100, uniform=False):
       distance from the limit shows only pairs beside it, which proves that a
       boundary is a boundary and nothing else.
 
-    `uniform` changes the question. Stratified sampling is for finding where
-    the line should sit: it deliberately over-shows rare scores. An error rate
-    needs the opposite — every cull in the plan equally likely — because the
-    number wanted is "of the photographs this would move, how many are wrong",
-    and that can only come from a sample drawn the way the plan was.
-
     The person sorts the sheets into `same/` and `different/` in Finder. The
     number-to-pair mapping goes only to Records, keeping the sort blind.
     """
@@ -548,19 +543,6 @@ def hunt(folder, opts, session, top=100, uniform=False):
     if not usable:
         print("  nothing was judged at full size \u2014 nothing to sort")
         return
-    if uniform:
-        # Every cull equally likely: the sample must be drawn the way the plan
-        # was, or the rate it produces describes the sample and not the plan.
-        culls = [r for r in usable if r[4]]
-        if not culls:
-            print("  nothing would be culled at this setting — nothing to audit")
-            return
-        random.Random().shuffle(culls)
-        picked = culls[:top]
-        drawn_from = len(culls)
-    else:
-        picked, drawn_from = None, len(usable)
-
     lo, hi = min(r[2] for r in usable), max(r[2] for r in usable)
     bands = 10
     width = (hi - lo) / bands or 1.0
@@ -568,16 +550,13 @@ def hunt(folder, opts, session, top=100, uniform=False):
     for r in usable:
         buckets[min(bands - 1, int((r[2] - lo) / width))].append(r)
     per = max(1, top // bands)
-    if picked is None:
-        picked = []
-    for bkey in sorted(buckets) if not uniform else ():
+    picked = []
+    for bkey in sorted(buckets):
         rows = buckets[bkey]
         random.Random(len(rows)).shuffle(rows)
         picked += rows[:per]
-    if len(picked) < top and not uniform:
-        # Top up a short stratified sample from anywhere. Never for an audit:
-        # its sample is the culls and nothing else, and padding it with pairs
-        # that were not culled would put a number on the wrong population.
+    if len(picked) < top:
+        # Top up a short stratified sample from anywhere.
         rest = [r for r in usable if r not in picked]
         random.Random(top).shuffle(rest)
         picked += rest[:top - len(picked)]
@@ -656,79 +635,103 @@ def hunt(folder, opts, session, top=100, uniform=False):
         sheet.save(os.path.join(out_dir, f"{n:03d}.jpg"), quality=88)
         made += 1
     _log_hunt(stamp, folder, picked, limit, len(scored))
-    if uniform:
-        short = ("" if made >= min(top, drawn_from)
-                 else f" — only {made} could be drawn")
-        print(f"  {made} of the {drawn_from:,} culls this setting would make, "
-              f"drawn at random{short}")
-        if drawn_from < 20:
-            print(f"  that is a small plan: expect a wide interval from it")
-        print(f"  sort them into same/ and different/ \u2014 different means "
-              f"the tool got it wrong")
-        print(f"  then: ./crull --audit-result")
-    else:
-        print(f"  {len(scored):,} pairs judged \u00b7 {made} sheets, blind, spread "
-              f"across the whole range")
-        print(f"  sort them into same/ and different/ \u2014 same means you cannot "
-              f"tell them apart at full size")
+    print(f"  {len(scored):,} pairs judged \u00b7 {made} sheets, blind, spread "
+          f"across the whole range")
+    print(f"  sort them into same/ and different/ \u2014 same means you cannot "
+          f"tell them apart at full size")
     print(f"  the answer key is Records/hunt {stamp} - pairs.csv; do not peek")
     reveal(out_dir)
 
 
-def audit_result():
-    """Read a sorted audit and say what the tool's error rate is.
+def audit(folder, opts, session, top=30):
+    """An honest error rate for a plan, from a blind look at a random sample.
+
+    Reviewing every cull tells you what this folder needs. It does not tell you
+    how often the tool is wrong, because by the end you have seen the answers
+    and cannot unsee them. This asks the same question with the answers
+    covered: culls drawn at random, no labels, and the side each frame lands on
+    decided by a coin, so nothing on the page hints at which one the tool chose.
+
+    Random and not stratified: the number wanted is "of the photographs this
+    would move, how many are wrong", and that can only come from a sample drawn
+    the way the plan was.
 
     The interval is Wilson's, which behaves when the count is small or the rate
     is near zero — both of which is exactly where this lands, and where the
     textbook interval gives nonsense like a negative lower bound.
     """
-    import glob
     import math
-    keys = sorted(glob.glob(os.path.join(DEFAULT_RECORDS, "hunt * - pairs.csv")))
-    if not keys:
-        sys.exit("no audit has been drawn yet")
-    key = keys[-1]
-    stamp = os.path.basename(key)[len("hunt "):-len(" - pairs.csv")]
-    answers = {r["sheet"]: r for r in csv.DictReader(open(key))}
-
-    sorted_into = {}
-    for base in sorted(glob.glob(os.path.join(WORKING_DIR, "Close Calls", "*"))):
-        for verdict in ("same", "different"):
-            d = os.path.join(base, verdict)
-            if not os.path.isdir(d):
-                continue
-            for f in os.listdir(d):
-                if f.lower().endswith(".jpg"):
-                    sorted_into[os.path.splitext(f)[0]] = verdict
-    if not sorted_into:
-        sys.exit("nothing has been sorted yet — put each sheet in same/ or different/")
-
-    culls = [(n, v) for n, v in sorted_into.items()
-             if answers.get(n, {}).get("verdict") == "culled"]
+    import random
+    scored = (session or {}).get("scored") or []
+    limit = (session or {}).get("result", {}).get("block", sift.DUP_BLOCK)
+    culls = [r for r in scored if r[5] is not None and r[4]]
     if not culls:
-        sys.exit("none of the sorted sheets were culls, so there is no rate to give")
-    n = len(culls)
-    wrong = sum(1 for _, v in culls if v == "different")
-    p = wrong / n
+        print("  nothing would be culled at this setting \u2014 nothing to audit")
+        return
+    rng = random.Random()
+    rng.shuffle(culls)
+    picked = culls[:top]
+
+    pairs = [{"group": n, "keeper": os.path.relpath(r[0], folder),
+              "culled": os.path.relpath(r[1], folder),
+              "keeper_path": r[0], "culled_path": r[1],
+              "why": "", "difference": None, "score": r[2],
+              "flip": rng.random() < 0.5}
+             for n, r in enumerate(picked)]
+
+    print(f"  {len(pairs)} of the {len(culls):,} culls this setting would make, "
+          f"drawn at random")
+    if len(culls) < 20:
+        print("  that is a small plan, so expect a wide interval from it")
+    action, answers = review.ask(
+        pairs, opts["checkdir"], f"blind audit \u2014 {len(pairs)} pairs",
+        "same photograph, or different? the tool's answer is hidden",
+        blind=True)
+    if action is None:
+        print("  audit closed without an answer")
+        return
+
+    judged = [(n, p) for n, p in enumerate(pairs)
+              if (answers.get(str(n)) or {}).get("denied")
+              or (answers.get(str(n)) or {}).get("swapped")]
+    if not judged:
+        print("  nothing was judged, so there is no rate to give")
+        return
+    wrong = [(n, p) for n, p in judged if answers[str(n)].get("denied")]
+    n_j, k = len(judged), len(wrong)
+    rate = k / n_j
 
     z = 1.96
-    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
-    half = (z / (1 + z * z / n)) * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+    centre = (rate + z * z / (2 * n_j)) / (1 + z * z / n_j)
+    half = (z / (1 + z * z / n_j)) * math.sqrt(
+        rate * (1 - rate) / n_j + z * z / (4 * n_j * n_j))
     lo, hi = max(0.0, centre - half), min(1.0, centre + half)
 
+    stamp = datetime.datetime.now().strftime("%Y.%m.%d %H%M")
+    if DEFAULT_RECORDS:
+        with open(os.path.join(DEFAULT_RECORDS, f"audit {stamp}.csv"),
+                  "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["kept", "other", "score", "limit", "you_said", "note"])
+            for n, pair in enumerate(pairs):
+                a = answers.get(str(n)) or {}
+                said = ("different" if a.get("denied") else
+                        "same" if a.get("swapped") else "")
+                w.writerow([pair["keeper"], pair["culled"],
+                            round(pair["score"], 2), round(limit, 2), said,
+                            (a.get("reason") or "").strip()])
+
     print(f"\n  audit {stamp}")
-    print(f"  {n} culls judged, drawn at random from the plan")
-    print(f"  {wrong} of them wrong \u00b7 {p * 100:.0f}%")
+    print(f"  {n_j} culls judged blind, drawn at random from the plan")
+    print(f"  {k} of them wrong \u00b7 {rate * 100:.0f}%")
     print(f"  the true rate is between {lo * 100:.0f}% and {hi * 100:.0f}%, "
           f"nineteen times in twenty")
     if wrong:
-        print("\n  the ones you marked different:")
-        for sheet, _ in sorted((c for c in culls if c[1] == "different")):
-            r = answers[sheet]
-            print(f"    {sheet}  scored {float(r['score']):.1f} against "
-                  f"{float(r['limit']):.0f}")
-            print(f"        kept {os.path.basename(r['kept'])}")
-            print(f"        lost {os.path.basename(r['other'])}")
+        print("\n  the ones you called different:")
+        for _, pair in wrong:
+            print(f"    scored {pair['score']:.1f} against {limit:.0f}")
+            print(f"        kept {pair['keeper']}")
+            print(f"        lost {pair['culled']}")
 
 
 def analyse(folder, opts):
@@ -746,169 +749,125 @@ def analyse(folder, opts):
     return sift.main(argv)
 
 
-# Reasons decided by rule rather than by a threshold. The keeper is larger, or
-# raw, or less compressed, or the file is byte-identical — settled by rule — or
-# the pair is one capture twice (a crop or tonal edit of the same instant,
-# rule. Looking at a proof image cannot change these answers, so they are kept
-# out of the review and attention goes where a decision could be wrong.
+# Culls settled by rule rather than by the dial: the keeper is larger, or raw,
+# or less compressed, or the file is byte-identical, or the pair is one capture
+# twice. They are still reviewed like everything else, but the dial cannot
+# change them, so they are left out when working out which settings are worth
+# offering — a setting that only differs in how it labels these is not a
+# different answer.
 MECHANICAL = {"exact copy", "identical picture", "smaller copy", "resave",
               "export of raw", "cropped copy", "rotated copy", "tonal edit"}
 
-# Biggest difference first, and only so many. The review is a list that stops
-# being interesting as you go down it, so ordering is the whole design: the
-# pairs most likely to be wrong are the ones you can most plainly see apart.
-#
-# Ranking by how much of a pair's *allowance* it used is not the
-# same thing when the limit can move: a pair at 29 under a tight setting
-# outranked one at 37 under a loose one, though 37 is the bigger difference.
-# That ranking also failed its own promise: across the 115 sheets reviewed
-# in one review the rejection rate was flat (13%, 10%, 13% by third), so it was
-# not finding the wrong calls. Raw difference is what he asked to see.
-# Above 1.0 a cull was never actually cleared against its own keeper. Grouping
-# now makes that impossible, so this should never fire; if it does, the
-# guarantee has broken and the tag says so.
-MARGIN_CHAIN = 1.0
 
-
-def spot_checks(folder, manifest, out_dir, count=None):
-    """Build the proof images: one for every photograph the run would move.
-
-    Every cull, including the ones settled by rule. A relationship the tool can
-    prove is still a photograph leaving, and the only way to know the proof is
-    sound is to have looked at one.
-
-    Ordered by how different the two frames are, most different first, so the
-    least confident call is the first thing seen. Work down until it stops
-    being interesting: what remains below is more alike, not less.
-
-    `count` forces a fixed total; 0 skips proof images.
-    """
-    rows = list(csv.DictReader(open(manifest)))
-    by_group = defaultdict(list)
-    for r in rows:
-        by_group[r["group"]].append(r)
-
-    # One proof image per culled photograph. A group of six shows five pairs,
-    # each against the frame that replaces it, because five photographs are
-    # leaving and each is its own decision.
+def pairs_from(folder, manifest):
+    """Every cull in a plan, as keeper-and-going, for the review page."""
+    groups = defaultdict(list)
+    for r in csv.DictReader(open(manifest)):
+        groups[r["group"]].append(r)
     pairs = []
-    for gid, members in by_group.items():
+    for gid, members in groups.items():
         keep = next((m for m in members if m["verdict"] == "KEEP"), None)
         if not keep:
             continue
+        going = []
         for m in members:
             if m["verdict"] != "REDUNDANT":
                 continue
             try:
-                margin = float(m.get("margin") or 0)
-            except ValueError:
-                margin = 0.0
-            try:
-                block = float(m["block_pct"])
+                diff = float(m["block_pct"])
             except (KeyError, TypeError, ValueError):
-                # No difference recorded: the comparison never produced one,
-                # which happens when it crashed. Not knowing is the least
-                # confident state there is, so it leads the review rather than
-                # sinking to the bottom the way a zero would.
-                block = None
-            pairs.append((gid, keep["file"], m["file"], m["why"], margin, 1,
-                          m.get("why_inferior", ""), block))
-    n_culls = sum(1 for r in rows if r["verdict"] == "REDUNDANT")
-    n_mech = sum(1 for r in rows
-                 if r["verdict"] == "REDUNDANT" and r["why"] in MECHANICAL)
-    if not pairs or count == 0:
-        return 0, n_culls, {}, n_mech
-    judged = pairs
-    total = len(pairs)
+                diff = None
+            going.append({"group": gid,
+                          "keeper": keep["file"], "culled": m["file"],
+                          "keeper_path": os.path.join(folder, keep["file"]),
+                          "culled_path": os.path.join(folder, m["file"]),
+                          "why": m["why"], "difference": diff})
+        # One keeper can stand for several frames, so a pair needs to say how
+        # many. Turning one round moves the whole group, not just that pair.
+        for row in going:
+            row["siblings"] = len(going)
+        pairs += going
+    # Most different first: the least confident call is the first thing seen,
+    # and a pair whose difference is unknown leads the whole review.
+    pairs.sort(key=lambda x: (x["difference"] is not None,
+                              -(x["difference"] or 0)))
+    return pairs
 
-    # Most different first, and anything whose difference is unknown ahead of
-    # all of it.
-    by_difference = sorted(judged, key=lambda p: (p[7] is not None, -(p[7] or 0)))
-    shown = by_difference[:count] if count is not None else by_difference
-    chosen = [(p, "chain" if p[4] > MARGIN_CHAIN else "closest") for p in shown]
 
-    # A fresh analysis replaces the old proof images rather than adding to them.
-    # Numbering restarts each run, so leaving the previous set behind would mix
-    # two runs' judgements in one folder with no way to tell them apart. These
-    # are regenerable output in the working folder, never anyone's photos.
-    os.makedirs(out_dir, exist_ok=True)
-    stale = [f for f in os.listdir(out_dir) if f.lower().endswith(".jpg")]
-    for f in stale:
-        try:
-            os.remove(os.path.join(out_dir, f))
-        except OSError:
-            pass
-    if stale:
-        print(f"  replaced {len(stale)} proof images")
-    try:
-        font = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 24)
-    except Exception:
-        try:
-            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
-        except Exception:
-            font = ImageFont.load_default()
-    try:
-        small = ImageFont.truetype("/System/Library/Fonts/Supplemental/Arial Bold.ttf", 19)
-    except Exception:
-        small = font
-    def fit(text, px, fnt):
-        """Trim from the left until it fits: the tail of a filename is the part
-        that differs, so the tail is kept and the head trimmed."""
-        try:
-            if fnt.getlength(text) <= px:
-                return text
-            while text and fnt.getlength("…" + text) > px:
-                text = text[1:]
-            return "…" + text
-        except AttributeError:
-            return text[:24]
+def record_review(job, pairs, answers, action, setting):
+    """Keep every judgement, whether or not anything moved.
 
-    W, PAD, LBL = 900, 8, 34
-    written = 0
-    for n, ((gid, keep, drop, why, margin, n_losers, because, block),
-            kind) in enumerate(chosen, 1):
-        progress(n, len(chosen), "proof images")
-        try:
-            a = open_image(os.path.join(folder, keep)).convert("RGB")
-            b = open_image(os.path.join(folder, drop)).convert("RGB")
-        except Exception:
-            continue
-        # Both frames to the same box, so a difference on screen is a difference
-        # in the photograph and not in how it was scaled.
-        a.thumbnail((W, W)); b.thumbnail((W, W))
-        H = max(a.height, b.height)
-        s = Image.new("RGB", (W * 2 + PAD * 3, H + LBL * 2 + 10), (20, 20, 22))
-        d = ImageDraw.Draw(s)
-        d.text((PAD, 5), "KEEP", fill=(130, 255, 150), font=font)
-        d.text((W + PAD * 2, 5), fit((because or why).upper(), W - PAD, font),
-               fill=(255, 140, 140), font=font)
-        s.paste(a, (PAD, LBL)); s.paste(b, (W + PAD * 2, LBL))
-        d.text((PAD, LBL + H + 4), fit(keep, W - PAD, small), fill=(170, 170, 175), font=small)
-        tail = os.path.basename(drop)
-        if n_losers > 1:
-            tail += f"   (+{n_losers - 1} more in this group, all closer to the keeper than this one)"
-        d.text((W + PAD * 2, LBL + H + 4), fit(tail, W - PAD, small),
-               fill=(170, 170, 175), font=small)
-        name = f"{n:03d}.jpg" if kind != "chain" else f"{n:03d}_chain.jpg"
-        s.save(os.path.join(out_dir, name), quality=88)
-        written += 1
-    # What the person was actually shown, so that applying can record their
-    # judgement. Every correction so far came from a viewed pair; these
-    # are the labels a future calibrated model would train on.
-    if chosen:
-        shown_path = os.path.join(DEFAULT_RECORDS,
-                                  os.path.basename(out_dir) + " - shown.csv")
-        with open(shown_path, "w", newline="") as fh:
-            w = csv.writer(fh)
-            w.writerow(["keeper", "culled", "why", "margin", "kind", "group_losers",
-                        "why_inferior", "block_pct"])
-            for (gid, keep, drop, why, margin, n_losers, because,
-                 block), kind in chosen:
-                w.writerow([keep, drop, why, round(margin, 3), kind, n_losers,
-                            because, "" if block is None else round(block, 1)])
-    counts = {k: sum(1 for _, kind in chosen if kind == k) for k in ("chain", "closest")}
-    counts["groups"] = len(judged)
-    return written, n_culls, counts, n_mech
+    An opinion about two photographs is the one thing here that cannot be
+    worked out again, so it is written down before the decision it informed.
+    Passes accumulate: looking at one setting and then another is two opinions
+    about the same folder, and the second does not cancel the first.
+    """
+    if not DEFAULT_RECORDS:
+        return
+    stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    path = os.path.join(DEFAULT_RECORDS, f"{job} - review.csv")
+    fresh = not os.path.exists(path)
+    with open(path, "a", newline="") as fh:
+        w = csv.writer(fh)
+        if fresh:
+            w.writerow(["judged_at", "setting", "action", "keeper", "culled",
+                        "why", "difference", "verdict", "reason"])
+        for n, pair in enumerate(pairs):
+            ans = answers.get(str(n)) or {}
+            verdict = ("refused" if ans.get("denied") else
+                       "turned round" if ans.get("swapped") else "accepted")
+            w.writerow([stamp, setting, action, pair["keeper"], pair["culled"],
+                        pair["why"],
+                        "" if pair["difference"] is None
+                        else round(pair["difference"], 1),
+                        verdict, (ans.get("reason") or "").strip()])
+    return path
+
+
+def revise(manifest, pairs, answers):
+    """Rewrite a plan to match what the review said.
+
+    A refused cull stays. A pair turned round makes that frame the keeper of
+    its whole group, because a group has one keeper and the others are judged
+    against it — saying the wrong one was chosen is a statement about the
+    group, not about one pairing inside it.
+
+    Both are edits to the plan, so the plan is what changes; nothing downstream
+    needs to know a person was involved.
+    """
+    rows = list(csv.DictReader(open(manifest)))
+    by_file = {r["file"]: r for r in rows}
+    refused = turned = 0
+    for n, pair in enumerate(pairs):
+        ans = answers.get(str(n)) or {}
+        if ans.get("denied"):
+            row = by_file.get(pair["culled"])
+            if row:
+                row["verdict"] = "KEEP"
+                row["why"] = ""
+                refused += 1
+        elif ans.get("swapped"):
+            keeper, culled = by_file.get(pair["keeper"]), by_file.get(pair["culled"])
+            if keeper and culled and keeper["verdict"] == "KEEP":
+                keeper["verdict"], culled["verdict"] = "REDUNDANT", "KEEP"
+                keeper["why"], culled["why"] = culled["why"], ""
+                if "why_inferior" in keeper:
+                    keeper["why_inferior"] = culled.get("why_inferior", "")
+                    culled["why_inferior"] = ""
+                turned += 1
+    # A group with nothing left to cull is not a group.
+    left = defaultdict(list)
+    for r in rows:
+        left[r["group"]].append(r)
+    for gid, members in left.items():
+        if not any(m["verdict"] == "REDUNDANT" for m in members):
+            for m in members:
+                m["verdict"] = "KEEP"
+    with open(manifest, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0]) if rows else [])
+        w.writeheader()
+        w.writerows(rows)
+    return refused, turned
 
 
 def job_name(folder, source=None):
@@ -1140,7 +1099,7 @@ def reset(no_prompt=False):
           f"{to_restore:,} photograph{'' if to_restore == 1 else 's'} to put back")
     print(f"  {size_text(weigh(cache))} of cache \u2014 what was read from each "
           f"photograph, every pairwise verdict, every keypoint screen")
-    print(f"  {size_text(weigh(checks))} of proof images")
+    print(f"  {size_text(weigh(checks))} of review pages")
     print("  judgements are kept")
     if not no_prompt:
         print("  reset everything? [y]es  [n]o")
@@ -1346,10 +1305,8 @@ def main():
                     metavar="N",
                     help="judge N culls drawn at random from the plan, blind, "
                          "for an honest error rate (default 30)")
-    ap.add_argument("--audit-result", action="store_true",
-                    help="read a sorted audit and report the error rate")
     ap.add_argument("--reset", action="store_true",
-                    help="undo every applied job and clear caches, proof images "
+                    help="undo every applied job and clear caches, reviews "
                          "and plans; judgements are kept")
     ap.add_argument("--undo", metavar="JOB",
                     help='reverse an applied job from its log, by its name')
@@ -1360,9 +1317,6 @@ def main():
     ap.add_argument("--ratio", type=float, default=None)
     ap.add_argument("--apply", action="store_true", help="move the redundant files out")
     ap.add_argument("--cull-dir", default=None)
-    ap.add_argument("--checks", type=int, default=None,
-                    help="force a fixed number of proof images (default: the run "
-                         "decides — every close call plus 60 sampled; 0 for none)")
     ap.add_argument("--hunt", nargs="?", type=int, const=100, default=None,
                     metavar="N",
                     help="write N pairs as blind sheets to sort into same/"
@@ -1371,12 +1325,6 @@ def main():
     ap.add_argument("--verbose", action="store_true",
                     help="full diagnostics: thresholds, bands, verification stats")
     a = ap.parse_args()
-
-    if a.audit_result:
-        if WORKING_DIR is None:
-            sys.exit("no working folder set yet")
-        audit_result()
-        return
 
     if a.reset:
         if WORKING_DIR is None:
@@ -1430,9 +1378,9 @@ def main():
         # folder, chosen before anything runs. A real folder dialog, because
         # nobody should have to type a path to answer "where should this go?".
         print("Cruller needs one folder for what it produces \u2014 culled photos,")
-        print("proof images and records. Never your library.")
+        print("reviews and records. Never your library.")
         wd = choose_folder("Choose Cruller's working folder — it will hold culled "
-                           "photos, proof images and records. Not your photo library.")
+                           "photos, reviews and records. Not your photo library.")
         if not wd and sys.stdin.isatty():           # dialog unavailable or cancelled
             wd = input("Working folder (will be created if needed): ").strip().rstrip(os.sep)
         if not wd:
@@ -1480,7 +1428,7 @@ def main():
         job = find_open_job(folder) if a.apply else job_name(folder)
         if a.apply and not job:
             sys.exit("no open plan for this folder — run without --apply first, "
-                     "and look at the proof images")
+                     "and open the review")
         if not a.apply:
             retire_stale_plans(folder, keep=job)   # re-dragging a folder = fresh look
     opts["manifest"] = os.path.join(DEFAULT_RECORDS, f"{job} - plan.csv")
@@ -1515,28 +1463,14 @@ def main():
     if a.audit:
         # An audit judges a plan, so it audits the setting the analysis ran at.
         # An error rate for a setting nobody would apply says nothing.
-        hunt(folder, opts, session, a.audit, uniform=True)
+        audit(folder, opts, session, a.audit)
         return
-    dial = interactive and session is not None
-    n, total_pairs, kinds, n_mech = spot_checks(
-        folder, opts["manifest"], opts["checkdir"], 0 if dial else a.checks)
+    total_pairs = sum(1 for r in csv.DictReader(open(opts["manifest"]))
+                      if r["verdict"] == "REDUNDANT")
     if not total_pairs and not (interactive and session):
         if interactive:
             wait_to_close("nothing redundant found")
         return
-    if not n and total_pairs and (a.checks == 0 or not interactive):
-        # Only bow out when proof images were actually declined. A run whose
-        # culls are all mechanical — exact copies, resaves — produces no proofs
-        # to show but is still a decision the person should get to make, and
-        # would otherwise exit without ever offering the dial.
-        msg = f"cull {total_pairs:,}, no proof images \u00b7 {apply_hint}"
-        if interactive:
-            wait_to_close(msg)
-        else:
-            print(f"  {msg}")
-        return
-    if kinds.get("chain"):
-        print(f"  \u26a0 {kinds['chain']} chain \u2014 should be impossible")
 
     if interactive and session is None:
         # No options list is coming, so this is the only account of the run.
@@ -1548,51 +1482,49 @@ def main():
             return
         at = None                             # nothing rendered until chosen
 
-        def settle(i):
-            """Re-decide at outcome i and rebuild what the person looks at."""
-            session["result"] = session["regroup"](*limits_at(found[i - 1][0]))
-            return spot_checks(folder, opts["manifest"], opts["checkdir"], a.checks)
-
-        rebuilt = False
         while True:
-            if rebuilt:
-                if n:
-                    reveal(opts["checkdir"])
-                elif total_pairs:
-                    # Every cull settled by rule, so there is nothing to judge.
-                    print(f"  all {total_pairs:,} settled by rule "
-                          f"\u2014 nothing to review")
-                rebuilt = False
             red = [r for r in csv.DictReader(open(opts["manifest"]))
                    if r["verdict"] == "REDUNDANT"]
             size = sum(float(r["MB"] or 0) for r in red) * 1e6
             choice = ask_next(found, session["files"], at, size)
 
             if choice == "quit":
-                if at is None:
-                    # Leaving without picking: the plan on disk is whatever the
-                    # analysis used, which is not a setting anyone chose.
-                    print("  no setting chosen \u00b7 nothing moved")
-                else:
-                    print(f'  kept \u00b7 {apply_hint}')
-                break
-
-            if choice == "apply":
-                moved, freed, extra = apply_moves(
-                    folder, opts["manifest"], a.cull_dir,
-                    os.path.join(DEFAULT_RECORDS, job + " - thumbnails"), job)
-                record_settings(job, session)
-                refresh_dashboard()
-                print(f"  done \u00b7 {moved:,} moved \u00b7 {size_text(freed)} \u00b7 "
-                      f"{os.path.basename(WORKING_DIR)} holds "
-              f"{reclaimed_total():.1f} GB{extra}")
-                print(f'  to change your mind: --undo "{job}", or drop '
-                      f'that folder from Culled Photos on the app')
+                print("  no setting chosen \u00b7 nothing moved")
                 break
 
             at = int(choice[4:])
-            n, total_pairs, kinds, n_mech = settle(at)
-            rebuilt = True
+            session["result"] = session["regroup"](*limits_at(found[at - 1][0]))
+            pairs = pairs_from(folder, opts["manifest"])
+            if not pairs:
+                print("  nothing to review at that setting")
+                continue
+
+            action, answers = review.ask(
+                pairs, opts["checkdir"],
+                f"{job} — {len(pairs)} to decide",
+                "keeping on the left, moving out on the right")
+            record_review(job, pairs, answers, action or "closed", at)
+            refused, turned = revise(opts["manifest"], pairs, answers)
+            if refused or turned:
+                print(f"  you refused {refused} \u00b7 turned {turned} round")
+
+            if action != "apply":
+                # Back to the settings: quitting the page is a verdict on this
+                # setting, not on the folder.
+                print("  nothing moved \u00b7 your answers are kept")
+                continue
+
+            moved, freed, extra = apply_moves(
+                folder, opts["manifest"], a.cull_dir,
+                os.path.join(DEFAULT_RECORDS, job + " - thumbnails"), job)
+            record_settings(job, session)
+            refresh_dashboard()
+            print(f"  done \u00b7 {moved:,} moved \u00b7 {size_text(freed)} \u00b7 "
+                  f"{os.path.basename(WORKING_DIR)} holds "
+                  f"{reclaimed_total():.1f} GB{extra}")
+            print(f'  to change your mind: --undo "{job}", or drop '
+                  f'that folder from Culled Photos on the app')
+            break
     else:
         print(f'  review, then: {apply_hint}')
 

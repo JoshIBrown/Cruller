@@ -6,12 +6,11 @@ frame to keep, and moves the rest to a holding folder with a log.
 **Nothing is ever deleted.** Every run is reversible with one command.
 
 ```bash
-./crull "/path/to/some/photos"          # look — changes nothing
-./crull "/path/to/some/photos" --apply  # move the redundant files out
+./crull "/path/to/some/photos"          # analyse, then review every cull in a page
+./crull "/path/to/some/photos" --apply  # skip the review, move the redundant files
 ./crull --undo "<job name>"             # put them all back
-./crull --reset                        # undo everything, clear every cache
-./crull "/folder" --audit              # judge 30 culls at random, blind
-./crull --audit-result                 # what the tool's error rate actually is
+./crull --reset                         # undo everything, clear every cache
+./crull "/folder" --audit               # judge 30 culls at random, blind, for a rate
 ```
 
 macOS users can drag a folder onto `Cruller.app` instead.
@@ -45,18 +44,39 @@ about 69% of them.
 
 ## Reviewing before you commit
 
-An analysis run writes a proof image for **every photograph it would move** —
-the frame that replaces it, side by side, at the same size — including the
-culls it can prove. A relationship the tool is certain about is still a
-photograph leaving.
+You are offered five settings and pick a cull count rather than guessing at a
+threshold. Choosing one opens a page in your browser showing **every photograph
+it would move** — the frame that replaces it on the left, the one leaving on
+the right, at the same size. Nothing is certain enough to skip: a relationship
+the tool has no doubt about is still a photograph leaving.
 
-They are ordered by how different the two frames are, most different first, so
+Pairs are ordered by how different the two frames are, most different first, so
 the least confident call is the first thing seen. A pair whose difference could
 not be measured leads the whole review, because not knowing is the least
 confident state there is.
 
-You are offered five settings, each with something to look at, and pick a cull
-count rather than guessing at a threshold.
+Every cull can be answered on its own:
+
+- **Do not cull this**, with a reason — that frame stays, and the rest of the
+  plan is unaffected.
+- **Wrong way round** — the frame on the right becomes the keeper. One keeper
+  can stand for several frames, so this is a statement about the whole group,
+  and the page allows one per group.
+
+**Apply** moves what survives the review; **Quit** moves nothing and returns
+you to the settings. Both close the page, and both write down every judgement
+you made, because an opinion about two photographs is the one thing here that
+cannot be worked out again.
+
+### How often is it wrong?
+
+    ./crull "/some/folder" --audit
+
+Reviewing the whole plan tells you what a folder needs, but not the tool's
+error rate — by the end you have seen the answers. This asks the same question
+with the answers covered: culls drawn at random, no labels, and the side each
+frame lands on decided by a coin. It reports the share that were wrong and the
+range the true rate lies in.
 
 ## Installing
 
