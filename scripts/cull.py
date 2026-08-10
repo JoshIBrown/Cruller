@@ -242,10 +242,11 @@ def outcomes(session, manifest):
     them — so the settings run from fewest culls to most, and any one of them
     can be placed by where it falls between two already known.
 
-    Two are given rather than found: the most conservative setting and the most
-    thorough are always worth offering. The rest are placed in the widest gap
-    between the cull counts known so far, which is where a new option is worth
-    the most.
+    The most thorough setting is weighed first. Its plan holds every pair the
+    tool would ever cull, and each pair's own numbers say the lowest setting at
+    which it would qualify — so the settings worth offering are read out of the
+    pairs rather than searched for, and the gentlest one that shows anything is
+    always among them.
 
     Ctrl-C keeps whatever has been found.
     """
@@ -292,70 +293,74 @@ def outcomes(session, manifest):
 
     seen = {}
 
-    rungs, lim = [TOLERANCE_FLOOR], 1.0     # 0 first, then geometric to the top
-    while lim < TOLERANCE_CEILING:
-        rungs.append(lim)
-        lim *= 1.18                          # fine: bisection makes rungs cheap
-    rungs.append(TOLERANCE_CEILING)
-    span = len(rungs) - 1                   # the top of the range to bisect
-
-    def at(i):
-        if i not in seen:
+    def at(limit):
+        """Weigh one setting: what it would cull, and how much of that is judged."""
+        key = round(limit, 4)
+        if key not in seen:
             with contextlib.redirect_stdout(io.StringIO()):
-                r = session["regroup"](*limits_at(rungs[i]))
+                r = session["regroup"](*limits_at(limit))
             rows = [x for x in csv.DictReader(open(manifest))
                     if x["verdict"] == "REDUNDANT"]
             r["judged"] = sum(1 for x in rows if x["why"] not in MECHANICAL)
-            seen[i] = r
+            r["limit"] = limit
+            r["rows"] = rows
+            seen[key] = r
             part[0] = 0.0                     # that setting is done; start the next
             draw()
-        return seen[i]
+        return seen[key]
 
-    # The ends are not searched for: the most conservative setting and the most
-    # thorough one are always offered, so they are simply weighed. That leaves
-    # three to find, and each one costs a full re-decide — every setting walks
-    # the candidate set again, about ten seconds on a folder of a thousand
-    # photographs.
-    #
-    # So they are not hunted by bisection. Each is placed where it does the most
-    # good: in the widest gap between the cull counts already known. Three
-    # placements, five settings weighed, five options — against seventeen for
-    # the same five before.
-    def widest_gap():
-        """The two known settings furthest apart in what they would cull."""
-        known = sorted(seen)
-        best, gap = None, -1
-        for lo, hi in zip(known, known[1:]):
-            if hi - lo < 2:
-                continue                      # no unweighed setting in between
-            here = seen[hi]["redundant"] - seen[lo]["redundant"]
-            if here > gap:
-                best, gap = (lo, hi), here
-        return best
+    def needed_by(row):
+        """The lowest setting at which this pair would be culled.
 
-    def offerable():
-        """Settings worth showing: they cull something, and something different.
-
-        A setting that culls nothing is not a choice, and two that cull the
-        same number are one choice written twice.
+        A pair is a duplicate when its difference is under the limit *and* its
+        texture-relative reading is under the ratio, which moves with the limit.
+        Turn both around and the pair names the setting it needs.
         """
-        counts = [seen[i]["redundant"] for i in sorted(seen)]
-        return len({n for n in counts if n})
+        try:
+            block = float(row["block_pct"] or 0)
+            ratio = float(row["ratio"] or 0)
+        except ValueError:
+            return None
+        return max(block, ratio / (sift.DUP_RATIO / sift.DUP_BLOCK))
 
-    at(0)
-    draw()
-    at(span)
     try:
-        # Keep placing until there are enough worth offering, not merely enough
-        # weighed. The most conservative setting often culls nothing at all,
-        # and a folder can answer the same at two settings — either way a
-        # placement is spent without earning an option.
-        while offerable() < MAX_OPTIONS:
-            pair = widest_gap()
-            if pair is None:
-                break                         # every setting between is weighed
-            at((pair[0] + pair[1]) // 2)
-            draw()
+        # The most thorough setting first. Its plan names every pair the tool
+        # would ever cull, and each pair's own numbers say the setting it needs
+        # — so the settings worth offering can be read rather than hunted for.
+        #
+        # Hunting for them missed the interesting half of the range: placing
+        # each new setting midway between two already weighed is blind to where
+        # culls actually appear, and on a folder whose culls cluster high it
+        # offered nothing at all between "none" and "a pair 60% different".
+        top = at(TOLERANCE_CEILING)
+        wanted = sorted(filter(None, (needed_by(r) for r in top["rows"]
+                                      if r["why"] not in MECHANICAL)))
+
+        # Spread the offers across those pairs, so each step admits a similar
+        # number more. The first is the gentlest setting that shows anything at
+        # all — the one somebody nervous about this reaches for — and every
+        # offer has something to look at, because a setting whose culls are all
+        # settled by rule gives nothing to judge and so is not a choice.
+        def offers():
+            """How many settings so far are worth offering."""
+            return len({seen[k]["redundant"] for k in seen if seen[k]["judged"]})
+
+        n = len(wanted)
+        spread = [round(k * (n - 1) / max(1, MAX_OPTIONS - 1))
+                  for k in range(MAX_OPTIONS)] if n else []
+        for i in spread:
+            at(wanted[i])
+
+        # Two of those can admit the same number and collapse into one choice.
+        # Walk the rest until the list is full, so a folder always offers the
+        # same number of ways to answer it. Budgeted, because every setting
+        # weighed is a full re-decide.
+        budget = MAX_OPTIONS * 2
+        for i in range(n):
+            if offers() >= MAX_OPTIONS or len(seen) >= budget:
+                break
+            if i not in spread:
+                at(wanted[i])
     except KeyboardInterrupt:
         pass                                  # keep whatever has been found
     finally:
@@ -363,15 +368,15 @@ def outcomes(session, manifest):
         sift.progress._only = None            # the stages after this show again
         sift.progress._relay = None
 
+    # Every offer must have something to look at. A setting whose culls are all
+    # settled by rule shows nothing, and two settings culling the same number
+    # are one choice written twice.
     found = []
-    for i in sorted(seen):
-        r = seen[i]
-        if r["redundant"] and (not found or r["redundant"] != found[-1][1]):
-            found.append((rungs[i], r["redundant"], r["freed"], r["judged"]))
+    for key in sorted(seen):
+        r = seen[key]
+        if r["judged"] and (not found or r["redundant"] != found[-1][1]):
+            found.append((r["limit"], r["redundant"], r["freed"], r["judged"]))
     if len(found) > MAX_OPTIONS:
-        # Thin them out evenly, always keeping the safest and the most
-        # thorough, and say so — a list that silently drops choices is worse
-        # than a longer one.
         keep = sorted({round(i * (len(found) - 1) / (MAX_OPTIONS - 1))
                        for i in range(MAX_OPTIONS)})
         found = [found[i] for i in keep]
