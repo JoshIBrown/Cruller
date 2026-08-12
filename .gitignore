@@ -1,9 +1,3 @@
-# Everything that exists because the tool is developed here, rather than being
-# the tool. Tests and the photographs they judge, the sampler that gathers
-# judgements and the fitting that reads them, the check that keeps this
-# repository fit to hand to a stranger, and the working notes behind it all.
-Workshop/
-
 # Per-machine, written on first run.
 scripts/settings.conf
 
