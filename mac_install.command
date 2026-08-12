@@ -1,11 +1,11 @@
 #!/bin/bash
 #
-# mac_install.command — everything Cruller needs, in one command.
+# mac_install.command — everything PhotoCruller needs, in one command.
 #
 #   ./mac_install.command
 #
 # 1. Installs the Python libraries (numpy, pillow, opencv, pillow-heif).
-# 2. Builds Cruller.app, the Finder drop target.
+# 2. Builds PhotoCruller.app, the Finder drop target.
 #
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -20,9 +20,9 @@ pip3 install --quiet numpy pillow opencv-python-headless pillow-heif \
   || pip3 install numpy pillow opencv-python-headless pillow-heif
 
 
-echo "2/3  Cruller.app"
-APP="$HERE/Cruller.app"
-SRC="$(mktemp -t cruller).applescript"
+echo "2/3  PhotoCruller.app"
+APP="$HERE/PhotoCruller.app"
+SRC="$(mktemp -t photocruller).applescript"
 
 cat > "$SRC" <<'SCRIPT'
 on run
@@ -32,13 +32,13 @@ on run
 end run
 
 on ensureWorkingFolder()
-	-- The very first question, before anything else: where does Cruller's
+	-- The very first question, before anything else: where does PhotoCruller's
 	-- output live? Asked once, written to scripts/settings.conf, never again.
 	set toolDir to "__TOOLDIR__"
 	set conf to toolDir & "/scripts/settings.conf"
 	set hasIt to (do shell script "grep -qs '^[[:space:]]*working folder' " & quoted form of conf & " && echo yes || echo no")
 	if hasIt is "no" then
-		set wf to choose folder with prompt "First, choose Cruller's working folder — it will hold culled photos, reviews and records. Never your photo library itself. (You can create a new folder right here.)"
+		set wf to choose folder with prompt "First, choose PhotoCruller's working folder — it will hold culled photos, reviews and records. Never your photo library itself. (You can create a new folder right here.)"
 		do shell script "p=" & quoted form of (POSIX path of wf) & " ; printf 'working folder = %s\n' \"${p%/}\" >> " & quoted form of conf
 	end if
 end ensureWorkingFolder
@@ -68,7 +68,7 @@ on runCull(folderPaths, filePaths)
 	ensureWorkingFolder()
 
 	-- A queue left over from a dead session must not replay old jobs the moment
-	-- a new folder is dropped. If no Cruller window is working, any ticket older
+	-- a new folder is dropped. If no PhotoCruller window is working, any ticket older
 	-- than a minute is from that dead session and is discarded; tickets younger
 	-- than that are sibling events of this same drop and are kept.
 	set anyBusy to false
@@ -76,7 +76,7 @@ on runCull(folderPaths, filePaths)
 		repeat with w in windows
 			repeat with t in tabs of w
 				try
-					if custom title of t is "Cruller" and busy of t then set anyBusy to true
+					if custom title of t is "PhotoCruller" and busy of t then set anyBusy to true
 				end try
 			end repeat
 		end repeat
@@ -106,22 +106,22 @@ on runCull(folderPaths, filePaths)
 			fileArgs & " > " & quoted form of (toolDir & "/.queue/") & "$(date +%s)-$RANDOM.paths"
 	end if
 
-	set cmd to "export CRULLER_FROM_APP=1 ; cd " & quoted form of toolDir & " && ./crull --queue"
+	set cmd to "export PHOTOCRULLER_FROM_APP=1 ; cd " & quoted form of toolDir & " && ./crull --queue"
 
 	tell application "Terminal"
 		activate
-		-- If a Cruller window is already draining the queue, leave it alone: it
-		-- will reach the folders just added. Otherwise use an idle Cruller window,
+		-- If a PhotoCruller window is already draining the queue, leave it alone: it
+		-- will reach the folders just added. Otherwise use an idle PhotoCruller window,
 		-- or open one.
-		set busyCruller to false
+		set busyPhotoCruller to false
 		set idleTab to missing value
 		set idleWindow to missing value
 		repeat with w in windows
 			repeat with t in tabs of w
 				try
-					if custom title of t is "Cruller" then
+					if custom title of t is "PhotoCruller" then
 						if busy of t then
-							set busyCruller to true
+							set busyPhotoCruller to true
 						else
 							set idleTab to t
 							set idleWindow to w
@@ -131,7 +131,7 @@ on runCull(folderPaths, filePaths)
 			end repeat
 		end repeat
 
-		if busyCruller then
+		if busyPhotoCruller then
 			return -- the running window will get to them
 		else if idleTab is not missing value then
 			do script cmd in idleTab
@@ -141,7 +141,7 @@ on runCull(folderPaths, filePaths)
 		else
 			set newTab to do script cmd
 			try
-				set custom title of newTab to "Cruller"
+				set custom title of newTab to "PhotoCruller"
 			end try
 		end if
 	end tell

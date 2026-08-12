@@ -1,5 +1,5 @@
 @echo off
-rem Cruller setup for Windows. Double-click me once.
+rem PhotoCruller setup for Windows. Double-click me once.
 >nul chcp 65001
 where py >nul 2>nul && (set "PYRUN=py -3") || (set "PYRUN=python")
 echo 1/2  Python libraries

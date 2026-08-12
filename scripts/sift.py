@@ -80,7 +80,7 @@ def progress(done, total, label, width=32, counts=True, note=None):
     over time spent — because stages here are uniform enough that anything
     cleverer would only be wrong more precisely.
 
-    With CRULLER_PLAIN_PROGRESS set, emits parseable `@progress label|d|t`
+    With PHOTOCRULLER_PLAIN_PROGRESS set, emits parseable `@progress label|d|t`
     lines instead — that is how the window shows a live percentage without
     pretending to be a terminal.
     """
@@ -98,7 +98,7 @@ def progress(done, total, label, width=32, counts=True, note=None):
     if not fresh and done < total and now - getattr(progress, "_t", 0.0) < 0.2:
         return
     progress._t = now
-    if os.environ.get("CRULLER_PLAIN_PROGRESS"):
+    if os.environ.get("PHOTOCRULLER_PLAIN_PROGRESS"):
         # Whole numbers only: a stage may measure itself in fractions, but
         # anything parsing this expects counts. Scaled to tenths of a
         # percent so a fractional bar survives the trip.

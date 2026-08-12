@@ -1,5 +1,5 @@
 @echo off
-rem Cruller for Windows: drag a photo folder onto this file, or run
+rem PhotoCruller for Windows: drag a photo folder onto this file, or run
 rem   pc_crull.bat "C:\path\to\folder" [--apply] [--undo "job"] ...
 >nul chcp 65001
 set PYTHONIOENCODING=utf-8

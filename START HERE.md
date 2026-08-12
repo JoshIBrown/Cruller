@@ -1,4 +1,4 @@
-# Running Cruller yourself
+# Running PhotoCruller yourself
 
 ## One-time setup
 
@@ -11,7 +11,7 @@ permission — open Terminal, type `bash ` (with the space), drag
 mac_install.command into the window, and press Enter. That works regardless, and
 the script then repairs the permissions on itself and on `crull` for good.
 
-One command: installs the Python libraries, builds `Cruller.app`, and checks
+One command: installs the Python libraries, builds `PhotoCruller.app`, and checks
 that each library imports. You should see `numpy`, `PIL` and `cv2` reported as
 ok. HEIC support is optional — without it, iPhone HEIC files are skipped and
 the run says so.
@@ -28,7 +28,7 @@ What the libraries are for, in case one ever needs attention:
 The tool has one setting: the working folder, where everything it produces
 goes. The first time you run or drop anything, a folder dialog asks you to
 choose it (make a new folder right in the dialog if you like) — answered once,
-remembered in `scripts/settings.conf`. Clicking the Cruller.app icon with
+remembered in `scripts/settings.conf`. Clicking the PhotoCruller.app icon with
 nothing dropped asks which folder of photos to look through, the same way.
 
 ## Using it — the tested way
@@ -168,7 +168,7 @@ and keeps both. It would rather leave you two photos than cull on a guess.
 ## Changed your mind?
 
 **Drag the job's folder out of `Culled Photos` and drop it on
-Cruller.app.** The tool recognises its own output, tells you what the job was
+PhotoCruller.app.** The tool recognises its own output, tells you what the job was
 and how many files it holds, and asks before putting anything back:
 
     ● 2024.03 - Holiday
@@ -202,7 +202,7 @@ written to `Records/audit <timestamp>.csv` with what you said.
 
 ## Anything else
 
-    ./crull --dashboard     refresh Cruller.html
+    ./crull --dashboard     refresh PhotoCruller.html
     ./crull --help
 
 
@@ -212,13 +212,13 @@ Same tool, two different starters: double-click **pc_install.bat** once (needs
 Python from python.org, with "Add to PATH" ticked during its install), then
 **drag a photo folder onto pc_crull.bat** — Windows treats that as running it on
 that folder. First run pops the working-folder dialog, same as Mac. The review
-opens in your default browser; everything else is identical. No Cruller.app on
+opens in your default browser; everything else is identical. No PhotoCruller.app on
 Windows — the .bat file IS the drop target. (Built blind from a Mac; if
 anything misbehaves, say what it printed.)
 
 ## The drag-and-drop version
 
-Drag a photo folder onto `Cruller.app` (built by `./mac_install.command`) and a Terminal
+Drag a photo folder onto `PhotoCruller.app` (built by `./mac_install.command`) and a Terminal
 window opens sized to the tool, cleared, and runs the cull there — progress
 bars, the settings, and the review page before anything moves.
 

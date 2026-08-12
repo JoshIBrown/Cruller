@@ -183,7 +183,7 @@ def wait_to_close(message):
     for no reason.
     """
     print(f"  {message}")
-    if os.environ.get("CRULLER_MORE_QUEUED"):
+    if os.environ.get("PHOTOCRULLER_MORE_QUEUED"):
         return
     print("  [q]uit")
     while True:
@@ -1158,7 +1158,7 @@ def refresh_dashboard():
 
 
 def reclaimed_total():
-    """All-time GB in Cruller, from the logs. Small files; fast enough."""
+    """All-time GB in PhotoCruller, from the logs. Small files; fast enough."""
     gb = 0.0
     try:
         for f in os.listdir(DEFAULT_RECORDS):
@@ -1249,14 +1249,14 @@ def main():
         if sift.is_library_package(folder):
             sys.exit("that is a photo library managed by an app (Photos, Lightroom), not a\n"
                      "folder of files. Culling inside it would corrupt the library.\n"
-                     "Export the photos to a plain folder first, then point Cruller at that.")
+                     "Export the photos to a plain folder first, then point PhotoCruller at that.")
     if WORKING_DIR is None:
         # First run on this machine: ask once, remember it. One working
         # folder, chosen before anything runs. A real folder dialog, because
         # nobody should have to type a path to answer "where should this go?".
-        print("Cruller needs one folder for what it produces \u2014 culled photos,")
+        print("PhotoCruller needs one folder for what it produces \u2014 culled photos,")
         print("reviews and records. Never your library.")
-        wd = choose_folder("Choose Cruller's working folder — it will hold culled "
+        wd = choose_folder("Choose PhotoCruller's working folder — it will hold culled "
                            "photos, reviews and records. Not your photo library.")
         if not wd and sys.stdin.isatty():           # dialog unavailable or cancelled
             wd = input("Working folder (will be created if needed): ").strip().rstrip(os.sep)
@@ -1297,7 +1297,7 @@ def main():
     if sel:
         digest = hashlib.md5("\n".join(sorted(sel)).encode()).hexdigest()[:8]
         job = job_name(folder, source=f"{folder} (selection {digest})")
-        fd, lst = tempfile.mkstemp(prefix="cruller_selection_", suffix=".txt")
+        fd, lst = tempfile.mkstemp(prefix="photocruller_selection_", suffix=".txt")
         with os.fdopen(fd, "w") as fh:
             fh.write("\n".join(sel) + "\n")
         opts["files"] = lst

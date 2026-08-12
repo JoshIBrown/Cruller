@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# mac_package.command — build a clean Cruller.zip for giving to someone else.
+# mac_package.command — build a clean PhotoCruller.zip for giving to someone else.
 #
 # Double-click it. The zip lands on your Desktop. It contains the tool and the
 # user docs only: no settings, no compiled app (their installer rebuilds it),
@@ -11,7 +11,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="${HOME}/Desktop"
 [ -d "$OUT" ] || OUT="$HERE"
-STAGE="$(mktemp -d)/Cruller"
+STAGE="$(mktemp -d)/PhotoCruller"
 mkdir -p "$STAGE/scripts"
 
 # The tool and the docs a user needs — nothing else.
@@ -23,12 +23,12 @@ cp "$HERE"/docs/*.md "$STAGE/docs/"
 
 chmod +x "$STAGE/crull" "$STAGE/mac_install.command"
 
-ZIP="$OUT/Cruller.zip"
+ZIP="$OUT/PhotoCruller.zip"
 rm -f "$ZIP"
 if command -v ditto >/dev/null; then
     ditto -c -k --keepParent "$STAGE" "$ZIP"        # preserves permissions
 else
-    (cd "$(dirname "$STAGE")" && zip -qry "$ZIP" "Cruller")
+    (cd "$(dirname "$STAGE")" && zip -qry "$ZIP" "PhotoCruller")
 fi
 rm -rf "$(dirname "$STAGE")"
 echo "built: $ZIP"

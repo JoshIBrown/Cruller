@@ -1,4 +1,4 @@
-# Cruller
+# PhotoCruller
 
 Point it at a folder of photographs. It finds the near-duplicates, decides which
 frame to keep, and moves the rest to a holding folder with a log.
@@ -13,7 +13,7 @@ frame to keep, and moves the rest to a holding folder with a log.
 ./crull "/folder" --audit               # judge 30 culls at random, blind, for a rate
 ```
 
-macOS users can drag a folder onto `Cruller.app` instead.
+macOS users can drag a folder onto `PhotoCruller.app` instead.
 
 ## How it decides
 

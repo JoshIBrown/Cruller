@@ -8,7 +8,7 @@ Workshop/
 scripts/settings.conf
 
 # Built by the installer, and where dropped folders queue up.
-Cruller.app/
+PhotoCruller.app/
 .queue/
 
 # Anything the tool produces about a real library.

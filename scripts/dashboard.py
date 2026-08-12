@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""dashboard.py - one page: what Cruller has reclaimed, job by job.
+"""dashboard.py - one page: what PhotoCruller has reclaimed, job by job.
 
-Reads the logs in the working folder's Records and writes Cruller.html there.
+Reads the logs in the working folder's Records and writes PhotoCruller.html there.
 Safe to run any time; it only reads. cull.py refreshes it after every apply.
 """
 import argparse, csv, datetime, html, os, sys
@@ -69,7 +69,7 @@ def main():
     a = ap.parse_args()
     if not a.working:
         sys.exit("no working folder configured. Set it in scripts/settings.conf "
-                 "('working folder = /path'), or set CRULLER_DIR.")
+                 "('working folder = /path'), or set PHOTOCRULLER_DIR.")
     records = os.path.join(a.working, "Records")
     culled = os.path.join(a.working, "Culled Photos")
     checks = os.path.join(a.working, "Reviews")
@@ -94,7 +94,7 @@ def main():
 
     now = datetime.datetime.now().strftime("%d %B %Y, %H:%M")
     doc = f"""<!doctype html><html><head><meta charset="utf-8">
-<title>Cruller</title>
+<title>PhotoCruller</title>
 <style>
  :root {{ color-scheme: dark; }}
  body {{ margin:0; background:#14141a; color:#e8e8ef;
@@ -123,7 +123,7 @@ def main():
          padding:16px 20px; color:#b9b9c6; font-size:14px; margin-top:34px; }}
  .foot {{ color:#5a5a66; font-size:12px; margin-top:36px; }}
 </style></head><body><div class="wrap">
-<h1>Cru<span>ller</span></h1>
+<h1>Photo<span>Cruller</span></h1>
 <p class="sub">Culling redundant photos. Nothing is ever deleted — everything below was moved here and can be put back.</p>
 
 <div class="cards">
@@ -144,10 +144,11 @@ Emptying that folder is the only irreversible step, and it is yours to take.</di
 
 <p class="foot">Generated {now} · ./crull --dashboard</p>
 </div></body></html>"""
-    out = os.path.join(a.working, "Cruller.html")
+    out = os.path.join(a.working, "PhotoCruller.html")
     with open(out, "w") as fh:
         fh.write(doc)
-    print(f"{total_files:,} files, {gb(total_bytes)} reclaimed across {len(jobs)} jobs")
+    print(f"{total_files:,} files, {gb(total_bytes)} reclaimed across "
+          f"{len(jobs)} job{'' if len(jobs) == 1 else 's'}")
     print("dashboard:", out)
 
 

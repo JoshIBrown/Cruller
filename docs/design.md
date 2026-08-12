@@ -1,4 +1,4 @@
-# How Cruller decides
+# How PhotoCruller decides
 
 This explains every judgement the tool makes and why each number in it is the
 number it is. Nothing here assumes you have seen the code, and every figure was
