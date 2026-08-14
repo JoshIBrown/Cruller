@@ -39,10 +39,11 @@ geometry with the tone moved — is grouped whatever it measures, because the
 edit is exactly what makes the difference large. So even at 0 the tool culls
 provable copies, and no setting spares them.
 
-Candidates come from two pools, unioned: photographs that **look alike**
-(a 144-number brightness sketch) and photographs **close in time** (bursts
-chained at under 3 seconds). Measured against exhaustive all-pairs comparison,
-this misses nothing.
+Candidates come from two pools, unioned: photographs that **look alike** (a
+frequency signature of the sketch — its low frequencies, thresholded, with
+brightness dropped, so a re-toned copy still matches) and photographs **close
+in time** (bursts chained at under 3 seconds). Measured against exhaustive
+all-pairs comparison, this misses nothing.
 
 Which frame survives is decided by a ladder: format (raw wins) → resolution →
 metadata richness → compression tier → sharpness → file size. Sharpness settles

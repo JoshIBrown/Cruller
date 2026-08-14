@@ -154,10 +154,8 @@ def screen(pa, da, pb, db, shape):
     centre = np.float32([[[w_ / 2, h_ / 2]]])
     disp = float(np.linalg.norm(cv2.perspectiveTransform(centre, H) - centre)) / min(h_, w_)
     scale = float(np.sqrt(abs(np.linalg.det(H[:2, :2]))))
-    # A large shift or rezoom is not rejected here as "reframed". Measured
-    # against 46 labelled recomposed pairs, a reviewer culled 32 of them, so
-    # recomposition is not grounds to skip the full look — the overlap residual
-    # there is what decides.
+    # A large shift or rezoom is not rejected here; recomposition is not
+    # grounds to skip the full look. See `compare` for the measurement.
     return dict(scene="same", inliers=inl, keypoints=n, shift=disp, zoom=scale)
 
 
@@ -183,15 +181,14 @@ def compare(ga, gb, ka=None, da=None, kb=None, db=None):
     inl = int(mask.sum()) if mask is not None else 0
     if H is None or inl < MIN_INLIERS or inl / n < MIN_INLIER_RATIO:
         return dict(scene="different", inliers=inl, keypoints=n, block=None, ratio=None)
-    # The homography IS the camera motion, and it is recorded — but it is no
-    # longer a verdict. A shift over 10% of the frame or a rezoom past ±15%
-    # Returning `reframed`, never a duplicate, rests on the reasoning that
-    # a different composition is a different photograph. Measured against 46
-    # labelled recomposed pairs, a reviewer culled 31 — "I can only tell the
+    # The homography is the camera motion. It is recorded, but it is not a
+    # verdict. Rejecting a pair for a shift or rezoom past a fixed limit —
+    # "recomposed, therefore a different photograph" — costs real culls: of 46
+    # labelled recomposed pairs a reviewer culled 31 — "I can only tell the
     # difference because of the rotation" — and the overlap residual separates
-    # cullable from keep-both at AUC 0.802, nearly what it scores on
-    # ordinary pairs. So the residual decides here too; `_residual` already
-    # masks to the overlap, which is what makes that honest.
+    # cullable from keep-both among them at AUC 0.802, close to what it
+    # scores on ordinary pairs. So the residual decides here too, and `_residual` masks
+    # to the overlap, which is what makes that honest.
     h_, w_ = ga.shape
     centre = np.float32([[[w_ / 2, h_ / 2]]])
     moved = cv2.perspectiveTransform(centre, H)

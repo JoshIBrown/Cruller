@@ -459,16 +459,6 @@ REVIEW_SIZE = 1600
 
 
 
-# How unlike two frames' 16x9 brightness sketches may be and still be worth a
-# real look, in brightness levels per tile. Fitted on one folder: of the
-# culls that only this stage can find, the most distant sat at 29.6, so 35
-# keeps them all with room to spare. The cap exists for one degenerate case —
-# thousands of near-identical scans would otherwise pair quadratically — and,
-# measured the hard way on Art, so would an ordinary folder of one subject:
-# raising the cap to 300 took a 25-second run past ten minutes, because a
-# brightness threshold does not adapt to how alike a folder already is. The
-# cap stays where the old fixed count was, so this can only ever nominate
-# fewer pairs than before, never more.
 # How strongly two frequency signatures must agree before a pair is worth
 # comparing properly. Agreement runs from -1 to 1.
 #
@@ -1209,7 +1199,7 @@ def main(argv=None):
             extra[i].add(j)
             extra[j].add(i)
     # Two ways in, counted as pairs a person would recognise: A-with-B once,
-    # not once from each side. "Look alike" is the 16x9 brightness sketch;
+    # not once from each side. "Look alike" is the frequency signature;
     # "close in time" is bursts plus the minute window. The overlap says how
     # much either could be trusted on its own.
     def key(i, j):
