@@ -318,4 +318,17 @@ def ask(pairs, out_dir, title, subtitle, blind=False):
         pass
     finally:
         server.shutdown()
-    return answer.get("action"), answer.get("answers") or {}
+
+    # A pair that could not be rendered was never on the page, so it was never
+    # agreed to. Left alone it would carry no answer, read as accepted, and be
+    # culled unseen — which is the one thing the review exists to prevent.
+    given = answer.get("answers") or {}
+    unshown = [n for n, p in enumerate(pairs)
+               if not thumbs.get(p["keeper_path"])
+               or not thumbs.get(p["culled_path"])]
+    for n in unshown:
+        given[str(n)] = {"denied": True, "swapped": False,
+                         "reason": "could not be shown, so never judged"}
+    if unshown:
+        print(f"  {len(unshown)} could not be displayed \u00b7 kept, unjudged")
+    return answer.get("action"), given

@@ -943,7 +943,14 @@ def _label(job, stamp, outcome):
             if fresh:
                 w.writerow(["date", "job", "keeper", "culled", "why",
                             "difference", "you_said", "reason", "outcome"])
-            for r in csv.DictReader(open(reviewed)):
+            rows = list(csv.DictReader(open(reviewed)))
+            # Only the pass that was acted on. Looking at one setting and then
+            # another appends both, and marking the abandoned one "applied"
+            # would put culls in the ledger that never happened.
+            last = max((r["judged_at"] for r in rows), default=None)
+            for r in rows:
+                if r["judged_at"] != last:
+                    continue
                 w.writerow([stamp, job, r["keeper"], r["culled"], r["why"],
                             r["difference"], r["verdict"], r["reason"],
                             outcome])
