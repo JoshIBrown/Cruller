@@ -1247,9 +1247,11 @@ def main():
         if WORKING_DIR is not None and undo_from_drop(folder, a.no_prompt):
             return
         if sift.is_library_package(folder):
-            sys.exit("that is a photo library managed by an app (Photos, Lightroom), not a\n"
-                     "folder of files. Culling inside it would corrupt the library.\n"
-                     "Export the photos to a plain folder first, then point PhotoCruller at that.")
+            sys.exit(
+                "that is a photo library managed by an app (Photos,\n"
+                "Lightroom), not a folder of files. Culling inside it would\n"
+                "corrupt the library. Export the photos to a plain folder\n"
+                "first, then point PhotoCruller at that.")
     if WORKING_DIR is None:
         # First run on this machine: ask once, remember it. One working
         # folder, chosen before anything runs. A real folder dialog, because
