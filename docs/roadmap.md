@@ -41,12 +41,6 @@ The keeper measure responds to noise as well as to focus, so between two frames
 where one is grainier it can prefer the noisier one. Denoising first was
 measured and made things worse. No good answer yet.
 
-## Orientation metadata
-
-Rotation recorded in metadata rather than in pixels is not consistently applied
-before comparison, so a photograph that is upright on screen may be compared
-sideways.
-
 ## Consolidation
 
 The tool is six Python files that import each other. For something meant to be
