@@ -187,8 +187,8 @@ def compare(ga, gb, ka=None, da=None, kb=None, db=None):
     # labelled recomposed pairs a reviewer culled 31 — "I can only tell the
     # difference because of the rotation" — and the overlap residual separates
     # cullable from keep-both among them at AUC 0.802, close to what it
-    # scores on ordinary pairs. So the residual decides here too, and `_residual` masks
-    # to the overlap, which is what makes that honest.
+    # scores on ordinary pairs. So the residual decides here too, and
+    # `_residual` masks to the overlap, which is what makes that honest.
     h_, w_ = ga.shape
     centre = np.float32([[[w_ / 2, h_ / 2]]])
     moved = cv2.perspectiveTransform(centre, H)

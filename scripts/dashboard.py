@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """dashboard.py - one page: what PhotoCruller has reclaimed, job by job.
 
-Reads the logs in the working folder's Records and writes PhotoCruller.html there.
-Safe to run any time; it only reads. cull.py refreshes it after every apply.
+Reads the logs in the working folder's Records and writes PhotoCruller.html
+there. Safe to run any time; it only reads. cull.py refreshes it after every
+apply.
 """
 import argparse, csv, datetime, html, os, sys
 

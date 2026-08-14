@@ -1254,10 +1254,11 @@ def main():
         # First run on this machine: ask once, remember it. One working
         # folder, chosen before anything runs. A real folder dialog, because
         # nobody should have to type a path to answer "where should this go?".
-        print("PhotoCruller needs one folder for what it produces \u2014 culled photos,")
-        print("reviews and records. Never your library.")
-        wd = choose_folder("Choose PhotoCruller's working folder — it will hold culled "
-                           "photos, reviews and records. Not your photo library.")
+        print("PhotoCruller needs one folder for what it produces \u2014")
+        print("culled photos, reviews and records. Never your library.")
+        wd = choose_folder(
+            "Choose PhotoCruller's working folder — it will hold culled "
+            "photos, reviews and records. Not your photo library.")
         if not wd and sys.stdin.isatty():           # dialog unavailable or cancelled
             wd = input("Working folder (will be created if needed): ").strip().rstrip(os.sep)
         if not wd:

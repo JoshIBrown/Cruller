@@ -3,8 +3,8 @@
     working folder = /Volumes/SomeDrive/Some Folder
 
 It holds everything the tool produces, and is never the library being scanned.
-The environment variable PHOTOCRULLER_DIR overrides, mainly for tests. cull.py asks
-on first run when nothing is set, and writes the answer here.
+The environment variable PHOTOCRULLER_DIR overrides, mainly for tests.
+cull.py asks on first run when nothing is set, and writes the answer here.
 """
 import os
 
@@ -27,7 +27,8 @@ def _read():
 
 def working_dir():
     """The folder that holds everything the tool produces, or None if unset."""
-    return os.environ.get("PHOTOCRULLER_DIR") or _read().get("working folder") or None
+    return (os.environ.get("PHOTOCRULLER_DIR")
+            or _read().get("working folder") or None)
 
 
 def save_working(path):
