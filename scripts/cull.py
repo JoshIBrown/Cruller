@@ -1196,10 +1196,14 @@ def main():
     ap.add_argument("--files", metavar="LIST", default=None,
                     help="judge only the files named in LIST, one path per line "
                          "— how the app hands over a dropped selection")
-    ap.add_argument("--block", type=float, default=None)
-    ap.add_argument("--ratio", type=float, default=None)
+    ap.add_argument("--block", type=float, default=None, metavar="N",
+                    help="judge at this difference limit (0-100) instead of "
+                         "offering the settings list \u2014 for a plan that "
+                         "reproduces without anyone answering anything")
+    ap.add_argument("--ratio", type=float, default=None, metavar="N",
+                    help="the texture-relative limit that moves with --block; "
+                         "set both or neither")
     ap.add_argument("--apply", action="store_true", help="move the redundant files out")
-    ap.add_argument("--cull-dir", default=None)
     ap.add_argument("--hunt", nargs="?", type=int, const=100, default=None,
                     metavar="N",
                     help="judge N pairs blind from across the whole range, "
@@ -1277,8 +1281,6 @@ def main():
         config.save_working(wd)
         set_working(wd)
         print(f"working folder: {wd}\n")
-    if a.cull_dir is None:
-        a.cull_dir = DEFAULT_CULL
     wd = os.path.abspath(WORKING_DIR)
     if sel:
         inside = [p for p in sel if p == wd or p.startswith(wd + os.sep)]
@@ -1331,7 +1333,7 @@ def main():
 
     if a.apply:
         moved, freed, extra = apply_moves(
-            folder, opts["manifest"], a.cull_dir,
+            folder, opts["manifest"], DEFAULT_CULL,
             os.path.join(DEFAULT_RECORDS, job + " - thumbnails"), job)
         refresh_dashboard()
         print(f"  done \u00b7 {moved:,} moved \u00b7 {size_text(freed)} \u00b7 "
@@ -1398,7 +1400,7 @@ def main():
                 continue
 
             moved, freed, extra = apply_moves(
-                folder, opts["manifest"], a.cull_dir,
+                folder, opts["manifest"], DEFAULT_CULL,
                 os.path.join(DEFAULT_RECORDS, job + " - thumbnails"), job)
             record_settings(job, session)
             refresh_dashboard()

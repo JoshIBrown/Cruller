@@ -205,6 +205,18 @@ written to `Records/audit <timestamp>.csv` with what you said.
     ./crull --dashboard     refresh PhotoCruller.html
     ./crull --help
 
+**Running without being asked anything.** Two ways, for scripting and for
+measurement:
+
+    ./crull "/folder" --block 32 --ratio 21.9    judge at exactly this limit
+    ./crull "/folder" --no-prompt                report and stop, never ask
+
+`--block` is the same 0-100 difference you would pick from the settings list,
+given directly, so a plan can be reproduced later without anyone answering
+anything. `--ratio` is the texture-relative limit that normally moves with it;
+set both or neither. Neither moves a file on its own — `--apply` still does
+that. `--no-prompt` skips every question, including the one before an undo.
+
 
 ## On Windows
 
