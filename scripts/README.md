@@ -10,7 +10,7 @@ measurements behind them, and what was tried and rejected — see
 | | |
 |---|---|
 | `cull.py` | The command: arguments, the settings list, applying, undoing, reset, the blind audit |
-| `review.py` | The review page: every cull side by side, answered one at a time, served locally |
+| `review.py` | The review page: one group at a time, scrubbed frame by frame; also the blind audit |
 | `sift.py` | The engine: reads a folder, finds candidates, groups them, ranks each group, writes the plan |
 | `verify.py` | One question answered well — are these two frames the same photograph? Alignment and the residual |
 | `loaders.py` | Reading pictures and metadata across formats, including raws without demosaicing |
@@ -32,7 +32,7 @@ writes it for you.
 5. Survivors are grouped around a keeper chosen by the ranking ladder, and the
    result is written as a plan: one row per file, with its verdict and why.
 6. `cull.py` offers the outcomes the dial can produce; `review.py` shows the
-   one chosen as a page and returns what the person decided about each cull.
+   one chosen as a page of groups and returns which photographs survive each.
 7. `cull.py` rewrites the plan to match those answers and — only if asked —
    moves files and writes a log.
 

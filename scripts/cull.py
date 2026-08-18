@@ -639,48 +639,99 @@ MECHANICAL = {"exact copy", "identical picture", "smaller copy", "resave",
               "export of raw", "cropped copy", "rotated copy", "tonal edit"}
 
 
-def pairs_from(folder, manifest):
-    """Every cull in a plan, as keeper-and-going, for the review page."""
-    groups = defaultdict(list)
+def groups_from(folder, manifest):
+    """Every group the plan would cull from, in capture order, for the review.
+
+    A group is the unit a person actually decides about: these are the same
+    photograph, which of them survives? Presenting it as pairs asks the same
+    question once per cull and repeats the keeper in every one of them.
+
+    Members are ordered by capture time so the review can step through them
+    the way they were taken. The plan's choice of keeper travels with the
+    group as a starting position, not as a decision.
+    """
+    members = defaultdict(list)
     for r in csv.DictReader(open(manifest)):
-        groups[r["group"]].append(r)
-    pairs = []
-    for gid, members in groups.items():
-        keep = next((m for m in members if m["verdict"] == "KEEP"), None)
-        if not keep:
-            continue
-        going = []
-        for m in members:
-            if m["verdict"] != "REDUNDANT":
-                continue
+        if r["group"] != "":
+            members[r["group"]].append(r)
+
+    groups = []
+    for gid, rows in members.items():
+        if not any(r["verdict"] == "REDUNDANT" for r in rows):
+            continue                      # nothing to decide here
+        photos = []
+        for r in rows:
             try:
-                diff = float(m["block_pct"])
+                diff = float(r["block_pct"])
             except (KeyError, TypeError, ValueError):
                 diff = None
-            going.append({"group": gid,
-                          "keeper": keep["file"], "culled": m["file"],
-                          "keeper_path": os.path.join(folder, keep["file"]),
-                          "culled_path": os.path.join(folder, m["file"]),
-                          "why": m["why"], "difference": diff})
-        # One keeper can stand for several frames, so a pair needs to say how
-        # many. Turning one round moves the whole group, not just that pair.
-        for row in going:
-            row["siblings"] = len(going)
-        pairs += going
-    # Most different first: the least confident call is the first thing seen,
-    # and a pair whose difference is unknown leads the whole review.
-    pairs.sort(key=lambda x: (x["difference"] is not None,
-                              -(x["difference"] or 0)))
-    return pairs
+            try:
+                taken = float(r["taken"])
+            except (KeyError, TypeError, ValueError):
+                taken = 0.0
+            photos.append({"file": r["file"],
+                           "path": os.path.join(folder, r["file"]),
+                           "keep": r["verdict"] == "KEEP",
+                           "why": r["why"], "difference": diff, "taken": taken,
+                           "size": r["MB"], "dimensions": r["dimensions"],
+                           "because": r.get("why_inferior", "")})
+        photos.sort(key=lambda p: (p["taken"], p["file"]))
+        spread = [p["difference"] for p in photos if p["difference"] is not None]
+        groups.append({"id": gid, "photos": photos,
+                       # Unknown differences lead: not knowing is the least
+                       # confident state there is.
+                       "worst": max(spread) if spread else None})
+    groups.sort(key=lambda g: (g["worst"] is not None, -(g["worst"] or 0)))
+    return groups
 
 
-def record_review(job, pairs, answers, action, setting):
+def revise_groups(manifest, groups, answers):
+    """Rewrite the plan to match what the review said about each group.
+
+    The answers name which photographs survive, so the plan is written from
+    them directly rather than inferred: a group can end up keeping one, several,
+    all of them, or none.
+    """
+    rows = list(csv.DictReader(open(manifest)))
+    by_file = {r["file"]: r for r in rows}
+    changed = emptied = 0
+    # Keyed by position, as the page numbers them. The plan's own group ids are
+    # not positions — the review is ordered least-confident first — so looking
+    # answers up by id hands each group another group's verdicts.
+    for gi, g in enumerate(groups):
+        said = (answers.get(str(gi)) or {}).get("keep")
+        if said is None:
+            continue                      # never answered: the plan stands
+        keep = set(said)
+        for photo in g["photos"]:
+            row = by_file.get(photo["file"])
+            if row is None:
+                continue
+            want = "KEEP" if photo["file"] in keep else "REDUNDANT"
+            if row["verdict"] != want:
+                changed += 1
+                row["verdict"] = want
+                if want == "KEEP":
+                    row["why"] = ""
+                elif not row["why"]:
+                    row["why"] = "near-duplicate"
+        if not keep:
+            emptied += 1
+    with open(manifest, "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(rows[0]) if rows else [])
+        w.writeheader()
+        w.writerows(rows)
+    return changed, emptied
+
+
+def record_review(job, groups, answers, action, setting):
     """Keep every judgement, whether or not anything moved.
 
-    An opinion about two photographs is the one thing here that cannot be
-    worked out again, so it is written down before the decision it informed.
-    Passes accumulate: looking at one setting and then another is two opinions
-    about the same folder, and the second does not cancel the first.
+    One row per photograph: what the plan proposed, what the person said, and
+    the group it belonged to. An opinion about a photograph is the one thing
+    here that cannot be worked out again, so it is written down before the
+    decision it informed. Passes accumulate — looking at one setting and then
+    another is two opinions about the same folder.
     """
     if not DEFAULT_RECORDS:
         return
@@ -690,64 +741,22 @@ def record_review(job, pairs, answers, action, setting):
     with open(path, "a", newline="") as fh:
         w = csv.writer(fh)
         if fresh:
-            w.writerow(["judged_at", "setting", "action", "keeper", "culled",
-                        "why", "difference", "verdict", "reason"])
-        for n, pair in enumerate(pairs):
-            ans = answers.get(str(n)) or {}
-            verdict = ("refused" if ans.get("denied") else
-                       "turned round" if ans.get("swapped") else "accepted")
-            w.writerow([stamp, setting, action, pair["keeper"], pair["culled"],
-                        pair["why"],
-                        "" if pair["difference"] is None
-                        else round(pair["difference"], 1),
-                        verdict, (ans.get("reason") or "").strip()])
+            w.writerow(["judged_at", "setting", "action", "group", "file",
+                        "planned", "you_said", "why", "difference", "reason"])
+        for gi, g in enumerate(groups):
+            said = answers.get(str(gi)) or {}
+            keep = set(said.get("keep") or [])
+            answered = "keep" in said
+            for photo in g["photos"]:
+                w.writerow([stamp, setting, action, g["id"], photo["file"],
+                            "keep" if photo["keep"] else "cull",
+                            ("keep" if photo["file"] in keep else "cull")
+                            if answered else "",
+                            photo["why"],
+                            "" if photo["difference"] is None
+                            else round(photo["difference"], 1),
+                            (said.get("reason") or "").strip()])
     return path
-
-
-def revise(manifest, pairs, answers):
-    """Rewrite a plan to match what the review said.
-
-    A refused cull stays. A pair turned round makes that frame the keeper of
-    its whole group, because a group has one keeper and the others are judged
-    against it — saying the wrong one was chosen is a statement about the
-    group, not about one pairing inside it.
-
-    Both are edits to the plan, so the plan is what changes; nothing downstream
-    needs to know a person was involved.
-    """
-    rows = list(csv.DictReader(open(manifest)))
-    by_file = {r["file"]: r for r in rows}
-    refused = turned = 0
-    for n, pair in enumerate(pairs):
-        ans = answers.get(str(n)) or {}
-        if ans.get("denied"):
-            row = by_file.get(pair["culled"])
-            if row:
-                row["verdict"] = "KEEP"
-                row["why"] = ""
-                refused += 1
-        elif ans.get("swapped"):
-            keeper, culled = by_file.get(pair["keeper"]), by_file.get(pair["culled"])
-            if keeper and culled and keeper["verdict"] == "KEEP":
-                keeper["verdict"], culled["verdict"] = "REDUNDANT", "KEEP"
-                keeper["why"], culled["why"] = culled["why"], ""
-                if "why_inferior" in keeper:
-                    keeper["why_inferior"] = culled.get("why_inferior", "")
-                    culled["why_inferior"] = ""
-                turned += 1
-    # A group with nothing left to cull is not a group.
-    left = defaultdict(list)
-    for r in rows:
-        left[r["group"]].append(r)
-    for gid, members in left.items():
-        if not any(m["verdict"] == "REDUNDANT" for m in members):
-            for m in members:
-                m["verdict"] = "KEEP"
-    with open(manifest, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0]) if rows else [])
-        w.writeheader()
-        w.writerows(rows)
-    return refused, turned
 
 
 def job_name(folder, source=None):
@@ -924,6 +933,15 @@ def apply_moves(folder, manifest, dest_root, thumbs_dir, job):
     return moved, freed, extra
 
 
+def _header_of(path):
+    """The column names a CSV already uses, or None if it has none."""
+    try:
+        with open(path, newline="") as fh:
+            return next(csv.reader(fh), None)
+    except OSError:
+        return None
+
+
 def _label(job, stamp, outcome):
     """Add this job's review to the ledger that spans every folder.
 
@@ -936,13 +954,28 @@ def _label(job, stamp, outcome):
     if not os.path.exists(reviewed):
         return
     labels = os.path.join(DEFAULT_RECORDS, "labels.csv")
+    header = ["date", "job", "group", "file", "planned", "you_said", "why",
+              "difference", "reason", "outcome"]
     fresh = not os.path.exists(labels)
+    if not fresh and _header_of(labels) != header:
+        # The ledger is a record of somebody's opinions, and appending rows
+        # shaped differently from the ones already there silently ruins every
+        # one of them. Set the old file aside intact instead.
+        aside = os.path.join(DEFAULT_RECORDS, "labels (earlier format).csv")
+        n = 2
+        while os.path.exists(aside):
+            aside = os.path.join(DEFAULT_RECORDS,
+                                 f"labels (earlier format {n}).csv")
+            n += 1
+        os.rename(labels, aside)
+        print(f"  the label ledger changed shape \u00b7 the old one is kept as "
+              f"{os.path.basename(aside)}")
+        fresh = True
     try:
         with open(labels, "a", newline="") as fh:
             w = csv.writer(fh)
             if fresh:
-                w.writerow(["date", "job", "keeper", "culled", "why",
-                            "difference", "you_said", "reason", "outcome"])
+                w.writerow(header)
             rows = list(csv.DictReader(open(reviewed)))
             # Only the pass that was acted on. Looking at one setting and then
             # another appends both, and marking the abandoned one "applied"
@@ -951,9 +984,9 @@ def _label(job, stamp, outcome):
             for r in rows:
                 if r["judged_at"] != last:
                     continue
-                w.writerow([stamp, job, r["keeper"], r["culled"], r["why"],
-                            r["difference"], r["verdict"], r["reason"],
-                            outcome])
+                w.writerow([stamp, job, r["group"], r["file"], r["planned"],
+                            r["you_said"], r["why"], r["difference"],
+                            r["reason"], outcome])
     except OSError:
         pass
 
@@ -1379,19 +1412,22 @@ def main():
 
             at = int(choice[4:])
             session["result"] = session["regroup"](*limits_at(found[at - 1][0]))
-            pairs = pairs_from(folder, opts["manifest"])
-            if not pairs:
+            groups = groups_from(folder, opts["manifest"])
+            if not groups:
                 print("  nothing to review at that setting")
                 continue
+            n_photos = sum(len(g["photos"]) for g in groups)
 
-            action, answers = review.ask(
-                pairs, opts["reviewdir"],
-                f"{job} — {len(pairs)} to decide",
-                "keeping on the left, moving out on the right")
-            record_review(job, pairs, answers, action or "closed", at)
-            refused, turned = revise(opts["manifest"], pairs, answers)
-            if refused or turned:
-                print(f"  you refused {refused} \u00b7 turned {turned} round")
+            action, answers = review.ask_groups(
+                groups, opts["reviewdir"],
+                f"{job} — {len(groups)} groups, {n_photos} photographs",
+                "slide to step through each group; click a photograph to keep "
+                "or drop it")
+            record_review(job, groups, answers, action or "closed", at)
+            changed, emptied = revise_groups(opts["manifest"], groups, answers)
+            if changed:
+                note = f" \u00b7 {emptied} group(s) emptied" if emptied else ""
+                print(f"  you changed {changed} verdict(s){note}")
 
             if action != "apply":
                 # Back to the settings: quitting the page is a verdict on this

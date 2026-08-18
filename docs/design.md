@@ -221,43 +221,55 @@ seventeen settings to offer the same five.
 
 ## The review
 
-Choosing a setting opens a page in the browser holding **every cull that
-setting would make** — the keeper on the left, the frame leaving on the right,
-at the same size, so a difference on screen is a difference in the photograph.
-Nothing is certain enough to leave out. A relationship the tool can prove is
-still a photograph leaving, and a proof nobody looked at is only a claim.
+Choosing a setting opens a page holding **every group that setting would cull
+from**, one section each. A group is the unit a person actually decides about:
+these are the same photograph, so which of them survives? Nothing is left out —
+a relationship the tool can prove is still a photograph leaving, and a proof
+nobody looked at is only a claim.
 
-Pairs are ordered most different first, so the least confident call is read
-first and the list gets safer as it goes. A pair whose difference could not be
-measured leads all of them: not knowing is the least confident state there is.
+**One photograph on screen, and a slider through the rest.** The frames of a
+group sit in the same box, one visible, ordered by capture time; sliding
+replaces the picture without moving it. Scrubbing a burst then plays it like a
+short film.
 
-**A page rather than a folder of images.** Images in a folder can only be
-looked at, so the only answer they admit is agreeing or disagreeing with the
-whole plan at once, and a disagreement about one pair has nowhere to go. Each
-pair here carries its own two answers:
+This is the point of the design rather than a flourish. Two frames side by side
+ask the eye to compare across a gap, which is what makes a moved hand or a
+half-blink easy to miss at page size. The same two frames alternating in one
+position turn that difference into motion, which vision detects far more
+readily — the technique that found Pluto on photographic plates. It also scales
+where side-by-side does not: a group of twelve is one section and one gesture,
+not eleven pairings that repeat the keeper in every one.
 
-- **Refuse the cull**, with a reason. The frame stays; the plan is otherwise
-  untouched.
-- **Turn it round.** The frame on the right becomes the keeper.
+**Pairs were the earlier shape and misrepresented the data.** A group of six
+rendered as five sections, the same keeper in all of them, and a person
+disagreeing about which frame to keep had to express it five times.
 
-**Turning round is a statement about a group, not a pair.** A group has one
-keeper and every other member is judged against it, so one keeper can appear in
-several pairs — in a typical folder, a third of groups hold more than one cull.
-Saying the wrong frame was chosen therefore moves the whole group: the named
-frame becomes the keeper and the old keeper joins the culls. Two such answers
-in one group would ask for two keepers, so the page allows one, and the plan
-rewrite ignores a second if one ever arrives.
+**A verdict per photograph, not per pair.** Clicking the picture changes the
+frame on screen; clicking a mark below changes another. A group can therefore
+end with one kept, several, all of them — which refuses the group — or none,
+which moves the lot. That last is a preference the tool could not previously
+express, observed more than once: some sets are all worth losing.
 
-**Refusing does not.** A refused cull simply stays, which leaves its group with
-two frames kept and the rest still judged against the keeper that remains —
-coherent, because the frame they were compared to is still there.
+**The marked frame is a starting position, not a decision.** A ladder picks it
+— raw, then resolution, metadata, compression, sharpness — and sharpness
+settles about 69%, the rung with the least evidence behind it. Measured against
+pairs where a person named the side they wanted, the ladder agreed 2 times in
+6. It is a good default, worth having so a plan can be accepted wholesale, and
+worth one click to override.
+
+**Groups are ordered least confident first**, by the largest difference inside
+them, and a group holding a difference that could not be measured leads them
+all: not knowing is the least confident state there is.
 
 **Both buttons record everything.** Applying acts on the answers; quitting
-moves nothing and hands back the settings list, which is what five settings are
-for. Either way every judgement is written down, and passes accumulate rather
-than overwrite: looking at one setting and then another is two opinions about
-the same folder, and the second does not cancel the first. An opinion about two
-photographs is the one thing in a run that cannot be worked out again.
+moves nothing and returns to the settings, which is what several settings are
+for. Either way every photograph's verdict is written down, and passes
+accumulate rather than overwrite — looking at one setting and then another is
+two opinions about the same folder, and the second does not cancel the first.
+
+**A photograph the page cannot render is kept.** A file too corrupt to decode
+is left out of the page, and anything left out was never seen, so it cannot
+have been agreed to. Culling it would be culling unseen.
 
 ## Culls decided by rule
 

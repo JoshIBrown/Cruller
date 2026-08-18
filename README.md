@@ -51,29 +51,37 @@ about 69% of them.
 
 ## Reviewing before you commit
 
-You are offered the settings the dial can actually produce — usually five —
-and pick a cull count rather than guessing at a threshold. Choosing one opens a page in your browser showing **every photograph
-it would move** — the frame that replaces it on the left, the one leaving on
-the right, at the same size. Nothing is certain enough to skip: a relationship
-the tool has no doubt about is still a photograph leaving.
+You are offered the settings the dial can actually produce — usually five — and
+pick a cull count rather than guessing at a threshold. Choosing one opens a page
+in your browser, **one section per group**: a group being the set the tool
+believes are the same photograph, of which some are to be moved.
 
-Pairs are ordered by how different the two frames are, most different first, so
-the least confident call is the first thing seen. A pair whose difference could
-not be measured leads the whole review, because not knowing is the least
-confident state there is.
+Each group shows **one photograph at a time**, filling the screen, with a slider
+underneath. Slide left for the frames taken before it, right for those after,
+and the picture changes in place. Run through a burst quickly and it plays like
+a short film — which is the point. Change between frames in the same position is
+far easier to see than difference between two frames side by side, so a moved
+hand or a blink announces itself.
 
-Every cull can be answered on its own:
+Under the slider, one mark per photograph: green stays, red goes, and an
+outlined mark is the one the tool would have kept. Click the picture to change
+its mind about the frame you are looking at, or click a mark to change another.
 
-- **Do not cull this**, with a reason — that frame stays, and the rest of the
-  plan is unaffected.
-- **Wrong way round** — the frame on the right becomes the keeper. One keeper
-  can stand for several frames, so this is a statement about the whole group,
-  and the page allows one per group.
+That means a group can end up keeping one, several, all of them — which refuses
+the group entirely — or none at all, which moves the lot. Groups are ordered
+least confident first, and a group whose difference could not be measured leads
+all of them, because not knowing is the least confident state there is.
 
-**Apply** moves what survives the review; **Quit** moves nothing and returns
-you to the settings. Both close the page, and both write down every judgement
-you made, because an opinion about two photographs is the one thing here that
+**Apply** moves everything still marked to go; **Quit** moves nothing and hands
+you back the settings. Both close the page and write down every judgement, per
+photograph, because an opinion about a photograph is the one thing here that
 cannot be worked out again.
+
+**The keeper is a starting position, not a decision.** The tool marks one frame
+per group by a ladder — raw first, then resolution, metadata, compression,
+sharpness — and sharpness settles about 69% of them, which is the rung with the
+least evidence behind it. It is a good guess, not an answer, and one click
+overrides it.
 
 ### How often is it wrong?
 

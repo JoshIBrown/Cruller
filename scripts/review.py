@@ -12,6 +12,7 @@ hint at which frame the tool chose.
 It runs on a local address, serving only the folder being judged, and stops the
 moment the page answers.
 """
+import html
 import http.server
 import json
 import os
@@ -89,6 +90,49 @@ def _patch(path, fx, fy):
     return im.crop((max(0, x - DETAIL_HALF), max(0, y - DETAIL_HALF),
                     min(im.width, x + DETAIL_HALF),
                     min(im.height, y + DETAIL_HALF))), im.width
+
+
+def _serve(out_dir):
+    """Open the page written in `out_dir` and wait for it to answer.
+
+    Local only, serving that one folder, and gone the moment the page
+    replies.
+    """
+    answer = {}
+    ready = threading.Event()
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, directory=out_dir, **kw)
+
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                answer.update(json.loads(self.rfile.read(length) or b"{}"))
+            except ValueError:
+                pass
+            self.send_response(204)
+            self.end_headers()
+            ready.set()
+
+        def log_message(self, *a):
+            pass                            # the run's own output is the log
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{port}/index.html"
+    print(f"  review open in your browser — {url}")
+    webbrowser.open(url)
+    try:
+        ready.wait()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.shutdown()
+    return answer.get("action"), answer
 
 
 def _page(pairs, thumbs, title, subtitle, blind=False, details=None):
@@ -284,40 +328,7 @@ def ask(pairs, out_dir, title, subtitle, blind=False):
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as fh:
         fh.write(_page(pairs, thumbs, title, subtitle, blind, details))
 
-    answer = {}
-    ready = threading.Event()
-
-    class Handler(http.server.SimpleHTTPRequestHandler):
-        def __init__(self, *a, **kw):
-            super().__init__(*a, directory=out_dir, **kw)
-
-        def do_POST(self):
-            length = int(self.headers.get("Content-Length") or 0)
-            try:
-                answer.update(json.loads(self.rfile.read(length) or b"{}"))
-            except ValueError:
-                pass
-            self.send_response(204)
-            self.end_headers()
-            ready.set()
-
-        def log_message(self, *a):
-            pass                            # the run's own output is the log
-
-    with socket.socket() as probe:
-        probe.bind(("127.0.0.1", 0))
-        port = probe.getsockname()[1]
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    url = f"http://127.0.0.1:{port}/index.html"
-    print(f"  review open in your browser — {url}")
-    webbrowser.open(url)
-    try:
-        ready.wait()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.shutdown()
+    _, answer = _serve(out_dir)
 
     # A pair that could not be rendered was never on the page, so it was never
     # agreed to. Left alone it would carry no answer, read as accepted, and be
@@ -332,3 +343,222 @@ def ask(pairs, out_dir, title, subtitle, blind=False):
     if unshown:
         print(f"  {len(unshown)} could not be displayed \u00b7 kept, unjudged")
     return answer.get("action"), given
+
+
+def _group_page(groups, thumbs, title, subtitle):
+    """One section per group: the photograph, and a slider through the rest."""
+    blocks = []
+    for gi, g in enumerate(groups):
+        photos = [p for p in g["photos"] if thumbs.get(p["path"])]
+        if len(photos) < 2:
+            continue
+        start = next((i for i, p in enumerate(photos) if p["keep"]), 0)
+        frames, strip = [], []
+        for i, p in enumerate(photos):
+            on = " class=\"on\"" if i == start else ""
+            frames.append(
+                f'<img src="img/{thumbs[p["path"]]}" data-i="{i}"{on}>')
+            strip.append(
+                f'<button type="button" class="tick" data-i="{i}"'
+                f' onclick="toggle({gi},{i})" title="{html.escape(p["file"])}">'
+                f'<span></span></button>')
+        gap = photos[-1]["taken"] - photos[0]["taken"]
+        over = ("" if gap <= 0 else
+                f" · over {gap:.0f}s" if gap < 90 else
+                f" · over {gap / 60:.0f} min")
+        blocks.append(f"""
+<section class="group" data-g="{gi}" data-n="{len(photos)}">
+  <div class="head"><span class="num">{gi + 1}</span>
+    <span class="why">{len(photos)} photographs{over}</span>
+    <span class="state" id="t{gi}"></span></div>
+  <div class="stage" id="s{gi}" onclick="toggle({gi})">{''.join(frames)}
+    <div class="tag" id="g{gi}"></div></div>
+  <input type="range" class="scrub" min="0" max="{len(photos) - 1}"
+         value="{start}" oninput="show({gi}, +this.value)"
+         onchange="show({gi}, +this.value)">
+  <div class="strip">{''.join(strip)}</div>
+  <div class="foot"><span id="f{gi}"></span>
+    <input id="r{gi}" placeholder="anything worth noting? (optional)"
+           oninput="note({gi})"></div>
+</section>""")
+
+    state = json.dumps([[{"file": p["file"], "keep": p["keep"],
+                          "why": p["why"], "when": p["taken"],
+                          "size": p["size"], "dim": p["dimensions"],
+                          "chosen": p["keep"]}
+                         for p in g["photos"] if thumbs.get(p["path"])]
+                        for g in groups])
+    return f"""<meta charset="utf-8"><meta name="viewport"
+ content="width=device-width,initial-scale=1"><title>{title}</title>
+<style>
+ :root {{ color-scheme: dark }}
+ body {{ background:#16161a; color:#e8e8ea; margin:0;
+        font:15px/1.5 -apple-system,BlinkMacSystemFont,sans-serif }}
+ header {{ position:sticky; top:0; background:#16161aee; backdrop-filter:blur(6px);
+          padding:14px 20px; border-bottom:1px solid #2a2a30; z-index:5 }}
+ h1 {{ font-size:17px; margin:0 }} .sub {{ color:#9a9aa2; font-size:13px; margin-top:2px }}
+ .group {{ padding:16px 20px 20px; border-bottom:1px solid #23232a }}
+ .head {{ display:flex; gap:12px; align-items:baseline; margin-bottom:8px }}
+ .num {{ color:#6f6f78; font-variant-numeric:tabular-nums }}
+ .why {{ color:#c9c9d1 }} .state {{ margin-left:auto; font-size:13px; color:#9a9aa2 }}
+ /* Every frame sits in the same box, one visible, so sliding replaces the
+    picture without moving it — the difference is then the only thing moving. */
+ .stage {{ position:relative; height:62vh; background:#0e0e11; border-radius:6px;
+          overflow:hidden; cursor:pointer }}
+ .stage img {{ position:absolute; inset:0; margin:auto; max-width:100%;
+              max-height:100%; display:none }}
+ .stage img.on {{ display:block }}
+ .stage.keep {{ outline:3px solid #3d8a4b; outline-offset:-3px }}
+ .stage.cull {{ outline:3px solid #7a3b3b; outline-offset:-3px }}
+ .tag {{ position:absolute; left:10px; top:10px; padding:3px 9px; border-radius:4px;
+        font-size:12px; background:#000a; color:#e8e8ea }}
+ .scrub {{ width:100%; margin:12px 0 6px; accent-color:#4ea1ff }}
+ .strip {{ display:flex; gap:3px }}
+ .tick {{ flex:1; height:16px; padding:0; border:0; background:none; cursor:pointer }}
+ .tick span {{ display:block; height:6px; border-radius:3px; background:#3a3a44 }}
+ .tick.keep span {{ background:#3d8a4b }} .tick.cull span {{ background:#7a3b3b }}
+ .tick.here span {{ height:12px; margin-top:-3px }}
+ .tick.chosen span {{ box-shadow:0 0 0 2px #e8e8ea inset }}
+ .foot {{ display:flex; gap:10px; align-items:center; margin-top:10px;
+         color:#8a8a93; font-size:12px }}
+ input[type=text], .foot input {{ background:#1d1d23; color:#e8e8ea;
+   border:1px solid #33333b; border-radius:5px; padding:6px 9px; font-size:13px;
+   flex:1; min-width:180px }}
+ footer {{ position:sticky; bottom:0; background:#16161aee; backdrop-filter:blur(6px);
+          border-top:1px solid #2a2a30; padding:12px 20px; display:flex; gap:10px;
+          align-items:center }}
+ button.go {{ background:#2f6d3a; border:1px solid #3d8a4b; color:#e8e8ea;
+             border-radius:5px; padding:6px 11px; font-size:13px; cursor:pointer }}
+ button.plain {{ background:#26262e; border:1px solid #37373f; color:#e8e8ea;
+                border-radius:5px; padding:6px 11px; font-size:13px; cursor:pointer }}
+ #tally {{ color:#9a9aa2; font-size:13px; margin-left:auto }}
+ #done {{ padding:60px 20px; font-size:16px; display:none }}
+</style>
+<header><h1>{title}</h1><div class="sub">{subtitle}</div></header>
+<main id="list">{''.join(blocks)}</main>
+<footer>
+  <button class="go" onclick="finish('apply')">Apply</button>
+  <button class="plain" onclick="finish('quit')">Quit — move nothing</button>
+  <span id="tally"></span>
+</footer>
+<div id="done"></div>
+<script>
+const G = {state};
+const AT = G.map((g, i) => Math.max(0, g.findIndex(p => p.chosen)));
+const NOTE = {{}};
+
+function show(gi, i) {{
+  AT[gi] = i;
+  const box = document.getElementById('s' + gi);
+  box.querySelectorAll('img').forEach(im =>
+    im.classList.toggle('on', +im.dataset.i === i));
+  paint(gi);
+}}
+function toggle(gi, i) {{
+  if (i === undefined) i = AT[gi];        // clicking the photo toggles the one shown
+  G[gi][i].keep = !G[gi][i].keep;
+  paint(gi);
+}}
+function note(gi) {{ NOTE[gi] = document.getElementById('r' + gi).value; }}
+
+function when(t) {{
+  return t ? new Date(t * 1000).toLocaleString() : '';
+}}
+function paint(gi) {{
+  const g = G[gi], i = AT[gi], p = g[i];
+  const box = document.getElementById('s' + gi);
+  box.classList.toggle('keep', p.keep);
+  box.classList.toggle('cull', !p.keep);
+  document.getElementById('g' + gi).textContent =
+    (p.keep ? 'keeping' : 'moving out') + (p.chosen ? ' · the tool chose this one' : '');
+  const kept = g.filter(x => x.keep).length;
+  document.getElementById('t' + gi).textContent =
+    kept === 0 ? 'all of them go' :
+    kept === g.length ? 'all of them stay' : `${{kept}} of ${{g.length}} stay`;
+  document.getElementById('f' + gi).textContent =
+    `${{i + 1}}/${{g.length}} · ${{p.file}} · ${{p.dim}} · ${{p.size}} MB` +
+    (p.why ? ` · ${{p.why}}` : '') + ` · ${{when(p.when)}}`;
+  document.querySelectorAll(`[data-g="${{gi}}"] .tick`).forEach(t => {{
+    const n = +t.dataset.i;
+    t.classList.toggle('keep', g[n].keep);
+    t.classList.toggle('cull', !g[n].keep);
+    t.classList.toggle('here', n === i);
+    t.classList.toggle('chosen', g[n].chosen);
+  }});
+  let moved = 0, groups = 0;
+  G.forEach(gg => {{ const m = gg.filter(x => !x.keep).length;
+                    moved += m; if (m) groups++; }});
+  document.getElementById('tally').textContent =
+    `${{moved}} to move, from ${{groups}} group${{groups === 1 ? '' : 's'}}`;
+}}
+// Arrow keys step the group under the pointer: a frame at a time is how you
+// see what moved, and a slider drag overshoots.
+document.addEventListener('keydown', e => {{
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  const sec = document.querySelector('.group:hover') ||
+              [...document.querySelectorAll('.group')].find(s => {{
+                const r = s.getBoundingClientRect();
+                return r.top < innerHeight / 2 && r.bottom > innerHeight / 2;
+              }});
+  if (!sec) return;
+  const gi = +sec.dataset.g, n = +sec.dataset.n;
+  const i = Math.min(n - 1, Math.max(0, AT[gi] + (e.key === 'ArrowRight' ? 1 : -1)));
+  sec.querySelector('.scrub').value = i;
+  show(gi, i);
+  e.preventDefault();
+}});
+function finish(action) {{
+  // Only groups that were actually drawn. A group with too few readable
+  // frames has no section, so nobody saw it and it gets no verdict from here.
+  const answers = {{}};
+  document.querySelectorAll('.group').forEach(sec => {{
+    const i = +sec.dataset.g;
+    answers[i] = {{keep: G[i].filter(p => p.keep).map(p => p.file),
+                  reason: (NOTE[i] || '').trim()}};
+  }});
+  fetch('/done', {{method:'POST', headers:{{'Content-Type':'application/json'}},
+    body: JSON.stringify({{action, answers}})}}).then(() => {{
+      document.getElementById('list').style.display = 'none';
+      document.querySelector('header').style.display = 'none';
+      document.querySelector('footer').style.display = 'none';
+      const d = document.getElementById('done');
+      d.style.display = 'block';
+      d.textContent = action === 'apply'
+        ? 'Applying. You can close this page.'
+        : 'Nothing moved, your answers are kept. Back to the settings.';
+    }});
+}}
+G.forEach((_, i) => paint(i));
+</script>"""
+
+
+def ask_groups(groups, out_dir, title, subtitle):
+    """Show every group, take a verdict per photograph, return them.
+
+    Returns `(action, answers)` with answers keyed by group index, each
+    `{"keep": [filename, ...], "reason": str}`.
+    """
+    if not groups:
+        return None, {}
+    photos = [p for g in groups for p in g["photos"]]
+    thumbs = _thumbs([{"keeper_path": p["path"], "culled_path": p["path"]}
+                      for p in photos], os.path.join(out_dir, "img"))
+    page = _group_page(groups, thumbs, title, subtitle)
+    with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as fh:
+        fh.write(page)
+    action, answer = _serve(out_dir)
+
+    given = answer.get("answers") or {}
+    # A photograph that could not be rendered was never on the page, so nobody
+    # agreed to losing it. It is kept whatever the plan said — culling it would
+    # be culling unseen, which is the one thing the review exists to prevent.
+    missing = {p["file"] for p in photos if not thumbs.get(p["path"])}
+    if missing:
+        print(f"  {len(missing)} could not be displayed \u00b7 kept, unjudged")
+        for gi, g in enumerate(groups):
+            said = given.get(str(gi))
+            if said is None:
+                continue
+            here = [p["file"] for p in g["photos"] if p["file"] in missing]
+            said["keep"] = sorted(set(said.get("keep") or []) | set(here))
+    return action, given

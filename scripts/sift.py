@@ -1336,7 +1336,8 @@ def main(argv=None):
                 if i == best:
                     rows.append([os.path.relpath(r['path'], folder), "KEEP", gi, len(g), "",
                                  dims, r['tier'], round(r['sharp'], 1),
-                                 f"{r['bytes']/1e6:.1f}", "", "", "", "", "", ""])
+                                 f"{r['bytes']/1e6:.1f}", round(r['t'], 3),
+                                 "", "", "", "", "", ""])
                 else:
                     v = (_confirm(kr['path'], r['path'], REVIEW_SIZE)
                          if use_verify else None)
@@ -1348,7 +1349,7 @@ def main(argv=None):
                     kept_because = why_inferior(rank(best), rank(i))
                     rows.append([os.path.relpath(r['path'], folder), "REDUNDANT", gi, len(g), why,
                                  dims, r['tier'], round(r['sharp'], 1),
-                                 f"{r['bytes']/1e6:.1f}",
+                                 f"{r['bytes']/1e6:.1f}", round(r['t'], 3),
                                  round(m, 3),
                                  "" if b is None else round(b * 100, 1),
                                  "" if rr is None else round(rr, 2), sh, zm,
@@ -1368,7 +1369,7 @@ def main(argv=None):
         with open(out, "w", newline="") as fh:
             w = csv.writer(fh)
             w.writerow(["file", "verdict", "group", "group_size", "why", "dimensions",
-                        "compression_tier", "sharpness", "MB",
+                        "compression_tier", "sharpness", "MB", "taken",
                         "margin", "block_pct", "ratio", "shift", "zoom",
                         "why_inferior"])
             w.writerows(rows)

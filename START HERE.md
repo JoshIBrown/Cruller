@@ -54,34 +54,38 @@ have run once mostly skips straight to comparing.
 Reading is the slow part on a big folder — roughly a thousand photos a minute
 for raws, faster for JPEGs. Comparing uses every core you have.
 
-**2. Review**, in a page that opens in your browser.
+**2. Review**, in a page that opens in your browser, one section per group.
 
-**Every photograph it would move gets a pair**, the keeper on the left and the
-one leaving on the right, both frames at the same size so a difference on
-screen is a difference in the photograph. A group of six shows five pairs,
-because five photographs are leaving and each is its own decision — and that
-includes the ones the tool can prove are copies, since a proof you have never
-looked at is only a claim.
+A **group** is a set the tool believes are the same photograph. Some of them
+are to be moved; the review is where you decide which.
 
-**Ordered by how different the two photographs actually are**, most different
-first. Work down and stop when it stops being interesting: what remains below
-is more alike, not less examined. A pair whose difference could not be measured
-comes first of all, because not knowing is the least confident state there is.
+**One photograph at a time**, filling the screen, with a slider underneath.
+Slide left for frames taken before it, right for those after, and the picture
+changes in place without moving. Run through a burst quickly and it plays like
+a short film — which is the point. A change between two frames in the same
+position is far easier to spot than a difference between two frames side by
+side, so a blink or a turned head announces itself. Arrow keys step one frame
+at a time.
 
-**Every pair can be answered on its own.** Under each one:
+Under the slider is one mark per photograph — green stays, red goes, and an
+outlined mark is the one the tool would have kept. **Click the picture** to
+change your mind about the frame you are looking at, or **click a mark** to
+change another. The line below always says which frame you are on, its size,
+and when it was taken.
 
-- **Do not cull this**, with a reason if you want to leave one. That frame
-  stays and nothing else changes.
-- **Wrong way round** — the frame on the right becomes the keeper instead. One
-  keeper often stands for several frames, and the page says so when it does;
-  turning a pair round moves the whole group, so only one per group can be
-  turned.
+So a group can end up keeping one, several, all of them — refusing the group —
+or none, which moves the lot. Groups come least confident first, and one whose
+difference could not be measured leads them all, because not knowing is the
+least confident state there is.
 
-Click either photograph to open it larger.
+At the bottom: **Apply** moves everything still marked to go, **Quit** moves
+nothing and hands you back the settings. Both close the page and write down
+every judgement.
 
-At the bottom: **Apply the rest** moves everything you did not refuse, and
-**Quit** moves nothing and hands you back the settings. Both close the page,
-and both write down every judgement you made.
+**The starred frame is a guess, not an answer.** The tool picks one per group
+from a ladder — raw first, then resolution, metadata richness, compression,
+sharpness — and sharpness decides about 69% of them, on the rung with the least
+evidence behind it. One click overrides it.
 
 **One menu, and you drive.** Before asking anything, the tool works out which
 settings give genuinely different answers, and offers those:
