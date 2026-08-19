@@ -252,10 +252,17 @@ which moves the lot. That last is a preference the tool could not previously
 express, observed more than once: some sets are all worth losing.
 
 **The marked frame is a starting position, not a decision.** A ladder picks it
-— raw, then resolution, metadata, compression, sharpness — and sharpness
-settles about 69%, the rung with the least evidence behind it. Measured against
-pairs where a person named the side they wanted, the ladder agreed 2 times in
-6. It is a good default, worth having so a plan can be accepted wholesale, and
+— motion, then raw, resolution, metadata, compression, sharpness — and
+sharpness settles about 69%, the rung with the least evidence behind it.
+
+Two measurements, and they disagree because they ask different things. Against
+pairs where a person had *named the side they wanted*, the ladder agreed 2
+times in 6: where somebody holds a preference, it is often a preference no
+ranking over pixels can reach. Against groups drawn at random from a plan, it
+agreed 24 times in 24 — on ordinary duplicates there is usually little to
+choose between the frames, and the ladder picks a reasonable one.
+
+So it is a good default, worth having so a plan can be accepted wholesale, and
 worth one click to override.
 
 **Groups are ordered least confident first**, by the largest difference inside
