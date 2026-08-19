@@ -104,7 +104,7 @@ def _thumbs(pairs, out_dir):
 
 
 BLIND_FOOT = """
-  <button class="go" onclick="finish('audit')">Done \u2014 score me</button>"""
+  <button class="go" onclick="finish('audit')">Done</button>"""
 JUDGE_FOOT = """
   <button class="go" onclick="finish('apply')">Apply the rest</button>
   <button onclick="finish('quit')">Quit \u2014 move nothing</button>"""
@@ -370,7 +370,7 @@ function finish(action) {{
       const d = document.getElementById('done');
       d.style.display = 'block';
       d.textContent = action === 'audit'
-        ? 'Scoring. Your answer is in the terminal.'
+        ? 'Your answers are saved. You can close this page.'
         : (action === 'apply'
             ? 'Applying. You can close this page.'
             : 'Nothing moved, your answers are kept. Back to the settings.');
