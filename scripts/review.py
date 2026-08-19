@@ -12,12 +12,15 @@ hint at which frame the tool chose.
 It runs on a local address, serving only the folder being judged, and stops the
 moment the page answers.
 """
+import hashlib
 import html
+import shutil
 import http.server
 import json
 import os
 import socket
 import threading
+import time
 import webbrowser
 
 from loaders import open_image
@@ -50,6 +53,29 @@ def _srgb(im):
             ImageCms.createProfile("sRGB"), outputMode="RGB") or im
     except Exception:
         return im            # an unreadable profile is not worth losing the page over
+
+
+def _fresh_dir(items):
+    """A directory name no earlier round has used.
+
+    Every round writes 0000.jpg upward into the same place, and the pages are
+    served from a new port each time but the paths repeat. A browser holding
+    one of those paths from a previous round can answer from its own cache, and
+    then the photograph on screen is not the one being judged — which turns a
+    person's careful answers into answers about the wrong pair.
+    """
+    seed = f"{time.time()}{len(items)}".encode()
+    return "img-" + hashlib.md5(seed).hexdigest()[:8]
+
+
+def _sweep_old(out_dir, keep):
+    """Throw away earlier rounds' images, so they cannot be served again."""
+    try:
+        for f in os.listdir(out_dir):
+            if f.startswith("img") and f != keep:
+                shutil.rmtree(os.path.join(out_dir, f), ignore_errors=True)
+    except OSError:
+        pass
 
 
 def _thumbs(pairs, out_dir):
@@ -171,7 +197,8 @@ def _serve(out_dir):
 
 
 def _page(pairs, thumbs, title, subtitle, blind=False, details=None,
-          verdicts=("The same photograph", "Different photographs")):
+          verdicts=("The same photograph", "Different photographs"),
+          where="img"):
     foot = BLIND_FOOT if blind else JUDGE_FOOT
     blind_js = "true" if blind else "false"
     details = details or {}
@@ -193,17 +220,17 @@ def _page(pairs, thumbs, title, subtitle, blind=False, details=None,
             has = "" if not da else " with-spot"
             spot = ("" if not da else f"""
   <div class="spot"><div class="lbl">where they differ most, at full size</div>
-    <div class="frames"><figure><img src="img/{da}" loading="lazy"></figure>
-      <figure><img src="img/{db}" loading="lazy"></figure></div></div>""")
+    <div class="frames"><figure><img src="{where}/{da}" loading="lazy"></figure>
+      <figure><img src="{where}/{db}" loading="lazy"></figure></div></div>""")
             rows.append(f"""
 <section class="pair{has}" data-n="{n}" data-group="{n}">
   <div class="head"><span class="num">{n + 1}</span>
     <span class="state" id="s{n}"></span></div>
   <div class="frames">
     <figure><a href="img/{ka}" target="_blank">
-      <img src="img/{ka}" loading="lazy"></a></figure>
+      <img src="{where}/{ka}" loading="lazy"></a></figure>
     <figure><a href="img/{kb}" target="_blank">
-      <img src="img/{kb}" loading="lazy"></a></figure>
+      <img src="{where}/{kb}" loading="lazy"></a></figure>
   </div>{spot}
   <div class="acts">
     <button type="button" onclick="same({n})">{yes}</button>
@@ -226,10 +253,10 @@ def _page(pairs, thumbs, title, subtitle, blind=False, details=None,
     <span class="state" id="s{n}"></span></div>
   <div class="frames">
     <figure class="keep"><a href="img/{ka}" target="_blank">
-      <img src="img/{ka}" loading="lazy"></a>
+      <img src="{where}/{ka}" loading="lazy"></a>
       <figcaption><b>keeping</b> {os.path.basename(p['keeper_path'])}</figcaption></figure>
     <figure class="drop"><a href="img/{kb}" target="_blank">
-      <img src="img/{kb}" loading="lazy"></a>
+      <img src="{where}/{kb}" loading="lazy"></a>
       <figcaption><b>moving out</b> {os.path.basename(p['culled_path'])}</figcaption></figure>
   </div>
   <div class="acts">
@@ -361,12 +388,15 @@ def ask(pairs, out_dir, title, subtitle, blind=False,
     """
     if not pairs:
         return None, {}
-    img_dir = os.path.join(out_dir, "img")
+    where = _fresh_dir(pairs)
+    os.makedirs(out_dir, exist_ok=True)
+    _sweep_old(out_dir, where)
+    img_dir = os.path.join(out_dir, where)
     thumbs = _thumbs(pairs, img_dir)
     details = _details(pairs, img_dir) if blind else {}
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as fh:
         fh.write(_page(pairs, thumbs, title, subtitle, blind, details,
-                       verdicts))
+                       verdicts, os.path.basename(img_dir)))
 
     _, answer = _serve(out_dir)
 
@@ -385,7 +415,7 @@ def ask(pairs, out_dir, title, subtitle, blind=False,
     return answer.get("action"), given
 
 
-def _group_page(groups, thumbs, title, subtitle):
+def _group_page(groups, thumbs, title, subtitle, where="img"):
     """One section per group: the photograph, and a slider through the rest."""
     blocks = []
     for gi, g in enumerate(groups):
@@ -397,7 +427,7 @@ def _group_page(groups, thumbs, title, subtitle):
         for i, p in enumerate(photos):
             on = " class=\"on\"" if i == start else ""
             frames.append(
-                f'<img src="img/{thumbs[p["path"]]}" data-i="{i}"{on}>')
+                f'<img src="{where}/{thumbs[p["path"]]}" data-i="{i}"{on}>')
             strip.append(
                 f'<button type="button" class="tick" data-i="{i}"'
                 f' onclick="toggle({gi},{i})" title="{html.escape(p["file"])}">'
@@ -581,9 +611,12 @@ def ask_groups(groups, out_dir, title, subtitle):
     if not groups:
         return None, {}
     photos = [p for g in groups for p in g["photos"]]
+    made_in = _fresh_dir(photos)
+    os.makedirs(out_dir, exist_ok=True)
+    _sweep_old(out_dir, made_in)
     thumbs = _thumbs([{"keeper_path": p["path"], "culled_path": p["path"]}
-                      for p in photos], os.path.join(out_dir, "img"))
-    page = _group_page(groups, thumbs, title, subtitle)
+                      for p in photos], os.path.join(out_dir, made_in))
+    page = _group_page(groups, thumbs, title, subtitle, made_in)
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as fh:
         fh.write(page)
     action, answer = _serve(out_dir)

@@ -597,6 +597,21 @@ def has_motion(path, _seen={}):
     return _seen[path]
 
 
+# Where a cull is checked once more before it is believed. Fine detail is the
+# whole content of some photographs — a page of print, a page of music — and at
+# the resolution every other decision is made at, the characters are a few
+# pixels tall and average away. Two different pages then align beautifully,
+# because their margins and blocks do.
+#
+# Measured on the one pair a person refused twice out of 384 judged: it groups
+# at 1600 and at 2400, and reads as a different scene at 3200 and above, where
+# the keypoints land on the glyphs. Against 60 culls that same person accepted,
+# every one survives. Only a positive "different" overturns anything — where
+# the closer look cannot tell, it says nothing and the first answer stands,
+# because less evidence is not contrary evidence.
+CONFIRM_SIZE = 3200
+
+
 def derivative_kind(v, dt):
     """Crop, rotation or tonal edit of the same capture — provable lineage.
 
@@ -1179,6 +1194,18 @@ def main(argv=None):
         if not ok and derivative_kind(
                 v, abs(recs[keeper]['t'] - recs[other]['t'])):
             ok = True    # provable lineage is membership: the edit goes
+        if ok and use_verify:
+            # One more look, at a resolution that keeps the fine detail. Only
+            # a positive "different" overturns: where the closer look cannot
+            # tell, it says nothing, because less evidence is not contrary
+            # evidence. Paid only by pairs already judged duplicates.
+            closer = _confirm(recs[keeper]['path'], recs[other]['path'],
+                              CONFIRM_SIZE)
+            if closer["scene"] == "different":
+                ok = False
+                stats_v["refused by the closer look"] += 1
+                _audit_note(keeper, other, "closer look",
+                            f"different at {CONFIRM_SIZE}")
         if len(_pending["verdict"]) + len(_pending["screen"]) >= 2000:
             _flush()                       # bound what a killed run would lose
         _audit_note(keeper, other, "residual",
