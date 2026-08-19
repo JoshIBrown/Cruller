@@ -564,28 +564,61 @@ def same_picture(pa, pb):
         return False
 
 
+# How much of a pair may still differ while one is called a copy of the other.
+# Two ways to satisfy it, because there are two kinds of copy.
+#
+# A crop or a turn re-samples the same pixels, so what survives alignment is
+# encoding noise: measured across 139 culls whose lineage rests on file
+# properties — resized copies, re-saves, exports of a raw — every one sits at
+# or under 9.8, median 2.2.
+#
+# An edit that moves the tone shifts every pixel, so its plain residual is
+# large however faithful the copy. What stays small is the residual relative to
+# local texture: a labelled rotated-and-brightened copy scores 31.1 on the
+# first measure and 2.59 on this one, while a pair of faces a second apart
+# scores 31.1 and 22.73. The tone moves the whole frame evenly; a person moves
+# against their surroundings.
+#
+# Against a real library the pair of tests admits 1 of the 50 pairs that
+# geometry alone had claimed, and every one of the 139 real derivatives.
+DERIVED_MAX, DERIVED_RATIO = 10.0, 5.0
+
+
 def derivative_kind(v, dt):
     """Crop, rotation or tonal edit of the same capture — provable lineage.
 
-    Same-instant only: seconds apart, a crop signature is as often optical
-    zoom (measured 50/50). Where lineage is provable it is MEMBERSHIP, not
-    just a label — the edit itself can push the residual past any limit, and
-    an edit of the original is exactly what the keep-originals rule says must go.
+    Where lineage is provable it is MEMBERSHIP, not just a label: the edit
+    itself can push the residual past any limit, and an edit of the original is
+    exactly what the keep-originals rule says must go.
+
+    That bypass is only honest if the lineage is real, so each kind must show
+    the two pictures agree as well as that their geometry lines up. Framing
+    alone proves nothing: a burst shot while zooming nests one frame inside the
+    other exactly as a crop does, and a subject who moved between the frames
+    then leaves by a rule no dial can reach.
+
+    Same-instant only, too: seconds apart, a crop signature is as often an
+    optical zoom (measured 50/50).
     """
     if v is None or dt is None or dt >= 2.0 or v.get("scene") != "same":
         return None
+    block, rel = v.get("block"), v.get("ratio")
+    agrees = ((block is not None and block * 100 <= DERIVED_MAX)
+              or (rel is not None and rel <= DERIVED_RATIO))
     z = v.get("zoom") or 1.0
-    if (v.get("b_in_a") == 1.0 and z <= 0.91) or \
-            (v.get("a_in_b") == 1.0 and z >= 1.10):
+    if agrees and ((v.get("b_in_a") == 1.0 and z <= 0.91) or
+                   (v.get("a_in_b") == 1.0 and z >= 1.10)):
         return "cropped copy"
-    if v.get("rot") is not None and abs(abs(v["rot"]) - 90) < 3:
+    if agrees and v.get("rot") is not None and abs(abs(v["rot"]) - 90) < 3:
         return "rotated copy"
-    # The tonal signature alone must demand the IDENTICAL capture instant.
-    # Within a couple of seconds, "same geometry, light moved" describes a
-    # breaking wave or a changing face just as well as a brightness edit —
-    # the eggs-benedict lesson. A true edit inherits its source's timestamp
-    # to the millisecond; every labelled tonal derivative sits at exactly 0.
-    if (dt <= 0.01 and v.get("shift", 1.0) < 0.02 and abs(z - 1.0) < 0.03
+    # A true edit inherits its source's capture instant exactly, so this asks
+    # for the identical timestamp as well as unmoved geometry. That is not
+    # sufficient on its own: many cameras record only whole seconds, so frames
+    # of a burst share an instant to the millisecond too, and "same geometry,
+    # different light" then describes a changing face as readily as a
+    # brightness edit. The pictures still have to agree.
+    if (agrees and dt <= 0.01
+            and v.get("shift", 1.0) < 0.02 and abs(z - 1.0) < 0.03
             and abs(v.get("rot") or 0.0) < 1.0
             and (abs(v.get("lum_off") or 0.0) > 6
                  or abs((v.get("contrast") or 1.0) - 1.0) > 0.08)):
