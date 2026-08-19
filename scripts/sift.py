@@ -1323,11 +1323,15 @@ def main(argv=None):
         cat_count = defaultdict(int)
         freed = 0
         ordered = sorted(groups, key=lambda g: recs[g[0]]['t'])
+        # Every cull here is confirmed at full size, which on a loose setting
+        # is hundreds of full comparisons. Counted in comparisons rather than
+        # groups: one group can hold forty frames, and a bar that moves once
+        # per group sits still through all of them — which reads as a hang and
+        # gives an estimate that means nothing.
+        todo = sum(len(g) - 1 for g in ordered) or 1
+        seen = 0
+        progress(0, todo, "confirming culls")
         for gi, g in enumerate(ordered):
-            # Every cull here is confirmed at full size and measured, which on
-            # a loose setting is hundreds of full comparisons. Left to run
-            # silently, so a run looked finished while it was still working.
-            progress(gi + 1, len(ordered), "confirming culls")
             best = max(g, key=rank)
             kr = recs[best]
             for i in g:
@@ -1341,6 +1345,11 @@ def main(argv=None):
                 else:
                     v = (_confirm(kr['path'], r['path'], REVIEW_SIZE)
                          if use_verify else None)
+                    # After the work, never before: reporting a step on the way
+                    # in shows the last one finished while it is still running,
+                    # and hands the cursor back mid-comparison.
+                    seen += 1
+                    progress(seen, todo, "confirming culls")
                     why = classify(kr, r, v, abs(kr['t'] - r['t']))
                     cat_count[why] += 1
                     freed += r['bytes']

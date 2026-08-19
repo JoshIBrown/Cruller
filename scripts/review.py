@@ -21,6 +21,7 @@ import threading
 import webbrowser
 
 from loaders import open_image
+from sift import progress
 
 THUMB_LONG = 1100          # generous: the point is to see whether it is a duplicate
 
@@ -29,6 +30,11 @@ def _thumbs(pairs, out_dir):
     """One image per file, however many pairs name it."""
     made = {}
     os.makedirs(out_dir, exist_ok=True)
+    # Every photograph is decoded and written once. On a big group that is a
+    # slow stage, and a slow stage without a bar reads as a hang — the run had
+    # already handed the cursor back after the stage before it.
+    want = len({p for pair in pairs
+                for p in (pair["keeper_path"], pair["culled_path"])})
     for pair in pairs:
         for path in (pair["keeper_path"], pair["culled_path"]):
             if path in made:
@@ -41,6 +47,7 @@ def _thumbs(pairs, out_dir):
                 made[path] = name
             except Exception:
                 made[path] = None
+            progress(len(made), want, "preparing the review")
     return made
 
 
@@ -62,10 +69,12 @@ def _details(pairs, out_dir):
     the whole question when the pair is a burst frame.
     """
     made = {}
+    want = sum(1 for p in pairs if p.get("detail")) or 1
     for n, pair in enumerate(pairs):
         spot = pair.get("detail")
         if not spot:
             continue
+        progress(len(made) + 1, want, "cropping the differences")
         fx, fy, dx, dy = spot
         try:
             a, wa = _patch(pair["keeper_path"], fx, fy)
