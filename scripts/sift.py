@@ -820,7 +820,7 @@ def why_inferior(keeper_rank, loser_rank):
     rung the two files differ on, from the loser's side, reading the same tuple
     the keeper rule ranked on.
     """
-    assert len(keeper_rank) == len(LADDER), "a rung was added without its phrase"
+    assert len(keeper_rank) <= len(LADDER), "a rung was added without its phrase"
     for (name, phrase), k, l in zip(LADDER, keeper_rank, loser_rank):
         if k != l:
             return phrase or "the same by every measure"
@@ -1181,7 +1181,7 @@ def main(argv=None):
 
     n = len(recs)
 
-    def rank(i):
+    def rank_above(i):
         r = recs[i]
         # A frame carrying a Live Photo's video outranks everything else a
         # ladder can measure. Its video travels with it when it is culled, so
@@ -1210,14 +1210,23 @@ def main(argv=None):
         # carrying the camera's block.
         untouched = 0 if (r.get('edited') or r.get('moved')) else 1
         camera = 1 if r.get('maker') else 0
+        return (motion, fmt_score, px, untouched, camera)
+
+    def rank_below(i):
+        """`once` and everything under it, for candidates `rank_above` tied.
+
+        Split here because reading the comb means decoding a file's scan, at
+        about 100ms, and almost every group is settled before this point. Asked
+        of every photograph in every group it doubled a folder's run for a rung
+        that changes one keeper in six hundred.
+        """
+        r = recs[i]
         # Whether the file itself proves it was saved again. A JPEG stores
         # whole numbers; saving it again with a finer table can only land on
         # some of the new ones, which leaves a comb of empty bins in the
-        # histogram that one quantization cannot produce. Read here rather
-        # than during the probe because it costs about 100ms and only matters
-        # for photographs that reached a group — which is the only place this
-        # is called from. It catches exactly the re-save that beats its own
-        # source on the rungs below: a coarser one already loses there.
+        # histogram that one quantization cannot produce. It catches exactly
+        # the re-save that beats its own source on the rungs below: a coarser
+        # one already loses there.
         once = 0 if _saved_again(r['path']) else 1
         upright = 1 if r.get('upright') else 0
         # How coarsely this was quantized, unbucketed. The tier rounds onto a
@@ -1231,8 +1240,11 @@ def main(argv=None):
         # definition — and without a final tiebreak the leader of their group
         # was decided by whichever the scan happened to list first, which made
         # the plan depend on directory order rather than on the photographs.
-        return (motion, fmt_score, px, untouched, camera, once, upright, finer,
-                r.get('meta', 0), -r['tier'], r['sharp'], r['bytes'], r['path'])
+        return (once, upright, finer, r.get('meta', 0), -r['tier'],
+                r['sharp'], r['bytes'], r['path'])
+
+    def rank(i):
+        return rank_above(i) + rank_below(i)
 
     def matches(keeper, other):
         """Is `other` redundant against `keeper`? The only membership test.
@@ -1515,7 +1527,9 @@ def main(argv=None):
         seen = 0
         progress(0, todo, "confirming culls")
         for gi, g in enumerate(ordered):
-            best = max(g, key=rank)
+            top = max(rank_above(i) for i in g)
+            tied = [i for i in g if rank_above(i) == top]
+            best = tied[0] if len(tied) == 1 else max(tied, key=rank_below)
             kr = recs[best]
             for i in g:
                 r = recs[i]
@@ -1538,7 +1552,9 @@ def main(argv=None):
                     freed += r['bytes']
                     m, b, rr = margin_against(best, i)
                     sh, zm = geometry_of(best, i)
-                    kept_because = why_inferior(rank(best), rank(i))
+                    ka, la = rank_above(best), rank_above(i)
+                    kept_because = (why_inferior(ka, la) if ka != la else
+                                    why_inferior(rank(best), rank(i)))
                     rows.append([os.path.relpath(r['path'], folder), "REDUNDANT", gi, len(g), why,
                                  dims, r['tier'], round(r['sharp'], 1),
                                  f"{r['bytes']/1e6:.1f}", round(r['t'], 3),

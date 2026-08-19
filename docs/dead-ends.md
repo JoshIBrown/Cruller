@@ -284,3 +284,30 @@ reads `0 1 2 4 6 8 9 8 6 4 2 1 0` after one save reads `4 0 6 0 8 0 9 0 8 0 6 0
 4` after a second, finer one. This entry stays because the shortcut is the
 obvious thing to try and it cannot be made to work — the loss is in the round
 trip, not in the statistic built on it.
+
+## An asymmetric residue in the DCT domain
+
+**The idea.** Image phylogeny asks "can A be transformed into B?", which has a
+different answer each way round, and that direction is what the keeper order
+lacks. Re-encoding one file with the other's table failed because it needed the
+encoder that made it — but requantization is deterministic, so the same
+question asked on the *stored coefficients* should not care which program did
+the saving. Dequantize A's coefficients by A's table, re-divide by B's, and
+compare against B's: if B is a re-save of A that residue is small, and the
+reverse should leave a residue that reconstructing B from A does not.
+
+**What was measured.** 54 right, 13 wrong, 23 silent over 90 known pairs. The
+errors were not scattered: every one was a pair whose re-save carried the
+*finer* table.
+
+**Why it fails.** It is not measuring direction. Reconstructing a coarse file
+from a fine one is easy because the detail is there, and the reverse is not, so
+the residue is smaller in the fine-to-coarse direction whatever the true
+lineage. Checked directly: across **36 of 36** known pairs it names the more
+finely quantized file as the source. That is the compression rung restated, and
+it inherits exactly the failure that started this work — a re-save at higher
+quality being called the original.
+
+A guard restricting it to the case it gets right cannot help, because the guard
+can only be written in terms of which file is finer, which is the answer it is
+supposed to produce.
