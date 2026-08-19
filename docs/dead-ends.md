@@ -233,3 +233,50 @@ veto is sound exactly when there is nothing behind it that was never seen. The
 question the sample was standing in for — how often is the tool wrong — is
 answered separately by a blind random audit, because a review where you are
 told the answer each time cannot measure the answerer.
+
+## Proving a re-save by re-encoding the other file
+
+**The idea.** Direction is the whole difficulty in telling an original from a
+copy of it, and every measurement the tool makes is symmetric. This one is not:
+if B is a re-save of A, then decoding A and encoding it again with **B's own
+quantization table and subsampling** must land on B exactly, because that is
+what re-saving did and JPEG encoding is deterministic. The reverse cannot work,
+since re-encoding B with A's finer table cannot invent back the detail B's
+coarser pass threw away. An exact reconstruction is proof rather than a
+preference.
+
+**What was measured.** On controls it is flawless: 52 right, 0 wrong, 12
+correctly silent, and the successful direction reconstructs bit-exactly. Two
+details had to be right for that — the patch must sit on the 16-pixel MCU grid,
+and only its interior may be compared, because encoding a crop downsamples
+chroma differently at its own edges than the full frame did.
+
+**Why it fails.** Every one of those controls was re-saved by the same encoder
+that then tried to reproduce it. Real re-saves are not: they were made by
+Apple, by Windows Photo Viewer, by Adobe, each rounding differently. Against 9
+real re-save pairs the answer was "neither reproduces the other" **9 times out
+of 9**. The test proves same-encoder re-saves, which are not the ones in a
+photo library.
+
+## Reading double compression through decoded pixels
+
+**The idea.** The textbook way to detect a re-save needs no encoder agreement:
+a JPEG stores coefficients divided by a quantization table and rounded, so
+quantizing twice with different tables maps several old integers onto one new
+one and leaves others unreachable, and the histogram grows periodic gaps. That
+is encoder-independent, which is exactly what the attempt above lacked.
+
+**What was tried.** Recovering the coefficients without a JPEG library, by
+decoding to pixels and taking the block DCT back.
+
+**Why it fails.** The round trip destroys the integer structure the method
+depends on. Measured directly: the recovered coefficients sit a median of
+**0.20 to 0.25 away from the nearest whole number**, with a 90th percentile of
+0.45 — near enough to uniform. There is no periodic histogram left to read, and
+a periodicity score built on it separated a known re-save from its source in
+2 cases out of 8, which is chance.
+
+**What would work.** The same method reading the coefficients as stored, which
+means decoding the entropy-coded data rather than the pixels. That is a
+self-contained baseline JPEG reader — bounded work, no new dependency — and it
+is the one remaining route to proving the direction of a re-save.

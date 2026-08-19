@@ -53,10 +53,10 @@ all-pairs comparison, this misses nothing.
 
 Which frame survives is decided by a ladder: carries a Live Photo's video →
 raw → resolution → nothing wrote it after the camera did → the camera's own
-marks → finer quantization → metadata richness → compression tier → sharpness
-→ file size.
+marks → the orientation flag is still set → finer quantization → metadata
+richness → compression tier → sharpness → file size.
 
-Four of those rungs exist to keep originals, because a copy is only obvious
+Five of those rungs exist to keep originals, because a copy is only obvious
 when it is smaller. Two of the four are evidence rather than inference: they
 say something happened to a file after the shutter, where every rung below
 them only says how big or how sharp it is.
@@ -70,6 +70,15 @@ moves it, which was true of every file an editor had signed and of 3% of the
 rest. It sits below resolution so a small edit can never beat a full frame, and
 it decides what nothing else can see — a red-eye fix, a colour conversion, a
 tonal change alter no dimension at all.
+
+**The orientation flag** records which way up the camera was held, leaving the
+pixels alone; software that turns a photograph transposes the pixels and resets
+the flag. It is still set on 45% of files that have the camera's block and on
+3% of those that do not. It decides a quarter-turn pair, where everything above
+it ties — a lossless rotate carries the metadata across, so even the marks tie
+— and file size was choosing instead. The turned copy is about 0.1% larger,
+because the turn moves the picture against the 8x8 grid, so the sideways frame
+was winning every time.
 
 **The camera's own marks** is the private block a camera writes and no editor
 regenerates: absent from every file an editor had signed, present on 90% of the

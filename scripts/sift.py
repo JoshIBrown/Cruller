@@ -210,7 +210,7 @@ EDITORS = ("photoshop", "lightroom", "gimp", "photo gallery", "picasa",
            "snapseed", "pixelmator", "affinity", "luminar", "capture one",
            "acdsee", "corel", "on1", "photos ", "photoscape", "paint.net")
 
-PROBE_VERSION = 6      # the camera's own marks are read
+PROBE_VERSION = 7      # the camera's own marks are read
 
 
 # Verdicts are pure functions of two files' bytes as well, so the full-look
@@ -248,7 +248,7 @@ def _cache_open():
 # Only content-derived fields live in the cache. `path`, `bytes`, `md5` and
 # the capture-time fallback are per-file facts filled in at run time.
 _CACHED_SCALARS = ('sharp', 'w', 'h', 'tier', 'qmean', 'raw', 'meta', 'edited',
-                   'maker', 'moved',
+                   'maker', 'moved', 'upright',
                    'focal', 'exposure', 'exif_t')
 
 
@@ -358,7 +358,7 @@ def _probe(path, md5=None):
         # A re-encode usually loses the capture metadata. When two files hold the
         # same picture at the same size, the one that still knows when it was
         # taken is the earlier generation.
-        meta, edited, maker, moved = 0, False, False, False
+        meta, edited, maker, moved, upright = 0, False, False, False, False
         try:
             if is_raw(path):
                 meta = 2
@@ -386,6 +386,16 @@ def _probe(path, md5=None):
                 # absent on 100% of files an editor signed, present on 90% of
                 # the rest.
                 maker = bool(sub.get(37500))
+                # A camera records which way up it was held and leaves the
+                # pixels alone; software that turns a photograph transposes the
+                # pixels and resets the flag. So a flag that is still set means
+                # nothing has re-written this frame's geometry — set on 45% of
+                # files that still have the camera's block and on 3% of those
+                # that do not. It decides a quarter-turn pair, where every
+                # other rung ties and file size was choosing: a turned copy is
+                # about 0.1% larger, because the turn moves the picture against
+                # the 8x8 grid, so the sideways frame was winning.
+                upright = ex.get(274) not in (None, 0, 1)
                 # A camera leaves the file's clock at the moment of capture.
                 # Moved on 100% of files an editor signed, on 3% of the rest.
                 shot_at, written_at = sub.get(36867), ex.get(306)
@@ -410,7 +420,7 @@ def _probe(path, md5=None):
                     spts=spts, sdes=sdes, sshape=(int(SCREEN_W * g.shape[0] / g.shape[1]), SCREEN_W),
                     tier=quantization_tier(path), raw=is_raw(path), meta=meta,
                     qmean=quantization_mean(path), edited=edited,
-                    maker=maker, moved=moved,
+                    maker=maker, moved=moved, upright=upright,
                     exif_t=ex_t, md5=md5, bytes=os.path.getsize(path),
                     focal=shot['focal35'], exposure=shot['exposure'])
     except Exception as e:
@@ -777,6 +787,7 @@ LADDER = (
     ("pixels",   "fewer pixels"),
     ("unedited", "something wrote it after the camera did"),
     ("camera",   "the camera's own marks are gone"),
+    ("upright",  "something turned it and reset the flag"),
     ("finer",    "more compressed"),
     ("metadata", "less metadata"),
     ("tier",     "much more compressed"),
@@ -1183,6 +1194,7 @@ def main(argv=None):
         # carrying the camera's block.
         untouched = 0 if (r.get('edited') or r.get('moved')) else 1
         camera = 1 if r.get('maker') else 0
+        upright = 1 if r.get('upright') else 0
         # How coarsely this was quantized, unbucketed. The tier rounds onto a
         # log scale, which is right for "much more compressed" and wrong here:
         # two generations of one picture often land in the same bucket. Read
@@ -1194,7 +1206,7 @@ def main(argv=None):
         # definition — and without a final tiebreak the leader of their group
         # was decided by whichever the scan happened to list first, which made
         # the plan depend on directory order rather than on the photographs.
-        return (motion, fmt_score, px, untouched, camera, finer,
+        return (motion, fmt_score, px, untouched, camera, upright, finer,
                 r.get('meta', 0), -r['tier'], r['sharp'], r['bytes'], r['path'])
 
     def matches(keeper, other):
