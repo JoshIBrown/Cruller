@@ -584,6 +584,19 @@ def same_picture(pa, pb):
 DERIVED_MAX, DERIVED_RATIO = 10.0, 5.0
 
 
+def has_motion(path, _seen={}):
+    """Does a Live Photo's video sit beside this frame?
+
+    Asked once per file and remembered: a group asks about the same frames
+    repeatedly, and this is the only rung of the ranking that touches the disk.
+    """
+    if path not in _seen:
+        stem = os.path.splitext(path)[0]
+        _seen[path] = any(os.path.exists(stem + e)
+                          for e in (".mov", ".MOV", ".mp4", ".MP4"))
+    return _seen[path]
+
+
 def derivative_kind(v, dt):
     """Crop, rotation or tonal edit of the same capture — provable lineage.
 
@@ -1084,6 +1097,12 @@ def main(argv=None):
 
     def rank(i):
         r = recs[i]
+        # A frame carrying a Live Photo's video outranks everything else a
+        # ladder can measure. Its video travels with it when it is culled, so
+        # losing that frame loses motion the survivor does not hold and no
+        # amount of resolution or sharpness replaces. It sits above the raw
+        # rung because a raw is still a single instant.
+        motion = 1 if has_motion(r['path']) else 0
         fmt_score = 1 if r['raw'] else 0        # the original always wins
         px = r['w'] * r['h']
         if r['raw'] and px == 0:
@@ -1093,7 +1112,7 @@ def main(argv=None):
         # and without a final tiebreak the leader of their group was decided by
         # whichever the scan happened to list first. That made the plan depend
         # on directory order, which is not a property of the photographs.
-        return (fmt_score, px, r.get('meta', 0), -r['tier'], r['sharp'],
+        return (motion, fmt_score, px, r.get('meta', 0), -r['tier'], r['sharp'],
                 r['bytes'], r['path'])
 
     def matches(keeper, other):
