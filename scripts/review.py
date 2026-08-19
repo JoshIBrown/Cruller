@@ -241,7 +241,13 @@ def _page(pairs, thumbs, title, subtitle, blind=False, details=None,
   </div>
 </section>""")
             continue
-        diff = "" if p.get("difference") is None else f"{p['difference']:.0f}% different"
+        # Coerced rather than formatted straight. Every thumbnail is already
+        # made by the time this runs, so a caller handing over the string a CSV
+        # holds used to end the review here and throw all of that away.
+        try:
+            diff = f"{float(p['difference']):.0f}% different"
+        except (KeyError, TypeError, ValueError):
+            diff = ""
         kin = p.get("siblings") or 1
         also = (f"<span class=\"kin\">this frame is kept in place of "
                 f"{kin} others</span>" if kin > 1 else "")
