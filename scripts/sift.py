@@ -201,7 +201,15 @@ def scan(folder, recursive, exclude=()):
 # re-run pays for fingerprints (two megabytes per file) instead of decodes,
 # and entries survive renames, culls and undos. Bump the version whenever
 # _probe or loaders change what gets extracted; old rows are then ignored.
-PROBE_VERSION = 3      # capture times now read from EXIF, not the filename
+# Programs that stamp their name into the Software tag when they write a file.
+# A camera writes its own model there, and a file nothing has touched carries
+# no such name — so between two frames of one group, the one without is the
+# earlier generation. Names only, never versions, so a new release still reads.
+EDITORS = ("photoshop", "lightroom", "gimp", "photo gallery", "picasa",
+           "snapseed", "pixelmator", "affinity", "luminar", "capture one",
+           "acdsee", "corel", "on1", "photos ", "photoscape", "paint.net")
+
+PROBE_VERSION = 4      # whether an editor signed the file is recorded too
 
 
 # Verdicts are pure functions of two files' bytes as well, so the full-look
@@ -238,7 +246,7 @@ def _cache_open():
 
 # Only content-derived fields live in the cache. `path`, `bytes`, `md5` and
 # the capture-time fallback are per-file facts filled in at run time.
-_CACHED_SCALARS = ('sharp', 'w', 'h', 'tier', 'raw', 'meta',
+_CACHED_SCALARS = ('sharp', 'w', 'h', 'tier', 'raw', 'meta', 'edited',
                    'focal', 'exposure', 'exif_t')
 
 
@@ -348,7 +356,7 @@ def _probe(path, md5=None):
         # A re-encode usually loses the capture metadata. When two files hold the
         # same picture at the same size, the one that still knows when it was
         # taken is the earlier generation.
-        meta = 0
+        meta, edited = 0, False
         try:
             if is_raw(path):
                 meta = 2
@@ -358,6 +366,14 @@ def _probe(path, md5=None):
                 with open(path, 'rb') as fh:
                     head = fh.read(300000)
                 meta = (1 if len(ex) >= 5 else 0) + (1 if b'ns.adobe.com/xap' in head else 0)
+                # An editor signs its work in the Software tag; a file straight
+                # from a camera carries the camera's name or nothing. Noted
+                # here, compared later: whole folders arrive processed — two in
+                # three files carrying one editor's name is ordinary for work
+                # delivered by a professional — so this means something only
+                # between two frames of one group.
+                edited = any(e in str(ex.get(t) or "").lower()
+                             for t in (305, 11) for e in EDITORS)
         except Exception:
             pass
         # Keypoints for the geometric screen, taken here because the frame is
@@ -377,6 +393,7 @@ def _probe(path, md5=None):
         return dict(path=path, thumb=thumb, sharp=sharp, w=w0, h=h0,
                     spts=spts, sdes=sdes, sshape=(int(SCREEN_W * g.shape[0] / g.shape[1]), SCREEN_W),
                     tier=quantization_tier(path), raw=is_raw(path), meta=meta,
+                    edited=edited,
                     exif_t=ex_t, md5=md5, bytes=os.path.getsize(path),
                     focal=shot['focal35'], exposure=shot['exposure'])
     except Exception as e:
@@ -1127,8 +1144,14 @@ def main(argv=None):
         # and without a final tiebreak the leader of their group was decided by
         # whichever the scan happened to list first. That made the plan depend
         # on directory order, which is not a property of the photographs.
-        return (motion, fmt_score, px, r.get('meta', 0), -r['tier'], r['sharp'],
-                r['bytes'], r['path'])
+        # Nothing has signed this one. Below resolution deliberately: a small
+        # edit must never beat a full-size original, and where the two are the
+        # same size this is what tells them apart — a red-eye fix and its
+        # source differ in no other way the ladder can see, and the fix was
+        # winning on file size.
+        untouched = 0 if r.get('edited') else 1
+        return (motion, fmt_score, px, untouched, r.get('meta', 0),
+                -r['tier'], r['sharp'], r['bytes'], r['path'])
 
     def matches(keeper, other):
         """Is `other` redundant against `keeper`? The only membership test.

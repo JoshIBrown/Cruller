@@ -51,9 +51,16 @@ brightness dropped, so a re-toned copy still matches) and photographs **close
 in time** (bursts chained at under 3 seconds). Measured against exhaustive
 all-pairs comparison, this misses nothing.
 
-Which frame survives is decided by a ladder: format (raw wins) → resolution →
-metadata richness → compression tier → sharpness → file size. Sharpness settles
-about 69% of them.
+Which frame survives is decided by a ladder: carries a Live Photo's video →
+raw → resolution → untouched by an editor → metadata richness → compression
+tier → sharpness → file size.
+
+Two of those rungs exist to keep originals. **Untouched** reads the Software
+tag: an editor signs its work and a camera does not, so where two frames are
+the same size and one has been through an editor, the other is the earlier
+generation. It sits below resolution so a small edit can never beat a full
+frame, and it decides the cases nothing else can see — a red-eye fix, a colour
+conversion, a tonal change, none of which alter a single dimension.
 
 ## Reviewing before you commit
 

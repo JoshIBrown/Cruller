@@ -252,7 +252,8 @@ which moves the lot. That last is a preference the tool could not previously
 express, observed more than once: some sets are all worth losing.
 
 **The marked frame is a starting position, not a decision.** A ladder picks it
-— motion, then raw, resolution, metadata, compression, sharpness — and
+— motion, then raw, resolution, untouched by an editor, metadata,
+compression, sharpness — and
 sharpness settles about 69%, the rung with the least evidence behind it.
 
 Two measurements, and they disagree because they ask different things. Against
