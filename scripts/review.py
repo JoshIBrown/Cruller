@@ -104,8 +104,13 @@ def _thumbs(pairs, out_dir):
     return made
 
 
-BLIND_FOOT = """
-  <button class="go" onclick="finish('audit')">Done</button>"""
+# Two footers, and which one shows depends on what pressing it will do. A page
+# that is only collecting judgements must not offer to apply anything: the word
+# reads as "move my photographs", and someone who does not want that quits
+# instead — which throws the judgements away. Josh, 2026-08-19: "the button
+# wording implies files will actually be moved."
+REVIEW_FOOT = """
+  <button class="go" onclick="finish('audit')">Done \u2014 send my answers</button>"""
 JUDGE_FOOT = """
   <button class="go" onclick="finish('apply')">Apply the rest</button>
   <button onclick="finish('quit')">Quit \u2014 move nothing</button>"""
@@ -199,8 +204,8 @@ def _serve(out_dir):
 
 def _page(pairs, thumbs, title, subtitle, blind=False, details=None,
           verdicts=("The same photograph", "Different photographs"),
-          where="img"):
-    foot = BLIND_FOOT if blind else JUDGE_FOOT
+          where="img", moves=True):
+    foot = JUDGE_FOOT if moves and not blind else REVIEW_FOOT
     blind_js = "true" if blind else "false"
     details = details or {}
     yes, no = verdicts
@@ -387,11 +392,16 @@ function finish(action) {{
 
 
 def ask(pairs, out_dir, title, subtitle, blind=False,
-        verdicts=("The same photograph", "Different photographs")):
+        verdicts=("The same photograph", "Different photographs"),
+        moves=True):
     """Show the page, wait for an answer, return it.
 
     Returns `(action, answers)` where action is "apply", "quit" or "audit", or
     `(None, {})` if the page was closed without answering.
+
+    `moves` says whether saying yes will move files. Pass False when the caller
+    only wants judgements, so the page offers to send them rather than to apply
+    anything.
     """
     if not pairs:
         return None, {}
@@ -403,7 +413,7 @@ def ask(pairs, out_dir, title, subtitle, blind=False,
     details = _details(pairs, img_dir) if blind else {}
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as fh:
         fh.write(_page(pairs, thumbs, title, subtitle, blind, details,
-                       verdicts, os.path.basename(img_dir)))
+                       verdicts, os.path.basename(img_dir), moves))
 
     _, answer = _serve(out_dir)
 
