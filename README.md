@@ -53,10 +53,11 @@ all-pairs comparison, this misses nothing.
 
 Which frame survives is decided by a ladder: carries a Live Photo's video →
 raw → resolution → nothing wrote it after the camera did → the camera's own
-marks → the orientation flag is still set → finer quantization → metadata
-richness → compression tier → sharpness → file size.
+marks → it proves it was saved again → the orientation flag is still set →
+finer quantization → metadata richness → compression tier → sharpness → file
+size.
 
-Five of those rungs exist to keep originals, because a copy is only obvious
+Six of those rungs exist to keep originals, because a copy is only obvious
 when it is smaller. Two of the four are evidence rather than inference: they
 say something happened to a file after the shutter, where every rung below
 them only says how big or how sharp it is.
@@ -70,6 +71,22 @@ moves it, which was true of every file an editor had signed and of 3% of the
 rest. It sits below resolution so a small edit can never beat a full frame, and
 it decides what nothing else can see — a red-eye fix, a colour conversion, a
 tonal change alter no dimension at all.
+
+**Saved again** is the only rung the photograph proves about itself, without
+reference to metadata anyone could have copied across. A JPEG stores each block
+as whole numbers; saving it again with a finer table divides those by a smaller
+step, which can only land on some of the new integers, so the histogram grows a
+comb of empty bins that a single pass cannot produce. Reading it means decoding
+the file's entropy-coded data rather than its pixels, because the round trip
+through pixels leaves the numbers a median of 0.2 off the nearest integer and
+the comb with them.
+
+It catches one half of the problem, and it is the half that matters: a re-save
+at *coarser* quality already loses on the compression rungs, while a finer one
+beats them, which is how a Windows Photo Viewer re-save came to be kept over
+its iPhone original. Only a clean comb counts — anything in between is read as
+saying nothing, since a rung that acts on a weak reading is a guess wearing
+evidence's clothes.
 
 **The orientation flag** records which way up the camera was held, leaving the
 pixels alone; software that turns a photograph transposes the pixels and resets

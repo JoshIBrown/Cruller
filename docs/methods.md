@@ -149,8 +149,19 @@ carry characteristic artefacts of a second compression, and the first
 quantization matrix can often be estimated. Published estimation accuracy is
 around 80%, rising with quality factor.
 
-**Why it matters here:** this is evidence rather than inference, and it costs
-nothing — the table is in the header.
+**Built, 2026-08-19.** The quantization table was already read. The rest — the
+DCT histogram — needed the coefficients as stored, which meant a baseline JPEG
+reader that decodes the entropy-coded data rather than the pixels; reading them
+through decoded pixels cannot work, and why is in dead-ends.md. A second, finer
+save leaves a comb of empty bins that one quantization cannot produce, and only
+a clean comb is acted on.
+
+**What it does not catch.** Saving again more *coarsely* collapses values
+together rather than leaving gaps, and looks like a photograph with less detail
+in it. That is the right half to miss: a coarser re-save already loses to its
+source on the compression rungs, while a finer one beats them. On 30 real
+auto-culls the comb spoke on 3, agreed with the camera marks every time it and
+they both spoke, and proved one direction the marks could not.
 
 ## Choosing the best frame of a burst
 
@@ -172,10 +183,12 @@ Three of these have a documented method that answers a question currently
 answered by inference:
 
 1. An asymmetric dissimilarity, so derivation has a direction that was measured
-   rather than assumed from which file holds more pixels.
-2. Resampling detection, so an upscale cannot pass for an original.
+   rather than assumed from which file holds more pixels. **Still open.**
+2. Resampling detection, so an upscale cannot pass for an original. **Open, and
+   the least urgent** — measured against real culls, keepers read 0.98 of the
+   culled file's detail reach where an enlargement would read 0.41.
 3. The quantization table, so a re-save is read from the file rather than
-   guessed from an inferred compression tier.
+   guessed from an inferred compression tier. **Done.**
 
 None is exotic and all are cheap. Each should be measured here before being
 believed, in the same way everything else was.

@@ -153,17 +153,19 @@ decides:
    tag, or a file clock moved away from the moment of capture.
 5. **The camera's own marks** — the private block a camera writes and an editor
    does not regenerate.
-6. **The orientation flag is still set** — a camera records which way up it was
+6. **It proves it was saved again** — a comb of empty bins in the histogram of
+   its stored coefficients, which one quantization cannot produce.
+7. **The orientation flag is still set** — a camera records which way up it was
    held; software that turns a picture transposes the pixels and resets it.
-7. **Finer quantization** — the matrix read straight from the header.
-8. **Metadata richness** — the file that still knows when and how it was taken.
-9. **Compression tier** — less lossy.
-10. **Sharpness**.
-11. **File size**.
-12. **Path** — a coin toss, present only so the order is total and the plan
+8. **Finer quantization** — the matrix read straight from the header.
+9. **Metadata richness** — the file that still knows when and how it was taken.
+10. **Compression tier** — less lossy.
+11. **Sharpness**.
+12. **File size**.
+13. **Path** — a coin toss, present only so the order is total and the plan
     does not depend on the order the folder was scanned in.
 
-Rungs 4, 5 and 6 are the only ones that are evidence rather than inference:
+Rungs 4 to 7 are the only ones that are evidence rather than inference:
 everything else is a property of one file, while those two say something
 happened to it after the shutter. They sit above the compression rungs because
 a re-save at higher quality beats its own source on those — measured on real

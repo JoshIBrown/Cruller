@@ -787,6 +787,7 @@ LADDER = (
     ("pixels",   "fewer pixels"),
     ("unedited", "something wrote it after the camera did"),
     ("camera",   "the camera's own marks are gone"),
+    ("once",     "it has been saved a second time"),
     ("upright",  "something turned it and reset the flag"),
     ("finer",    "more compressed"),
     ("metadata", "less metadata"),
@@ -795,6 +796,21 @@ LADDER = (
     ("bytes",    "smaller file"),
     ("path",     None),          # the coin toss; never a reason
 )
+
+
+def _saved_again(path):
+    """Does this file prove it was saved a second time?
+
+    Only a clean comb counts. Anything in between is a file this cannot read
+    and is treated as saying nothing, because a rung that acts on a weak
+    reading is a guess wearing evidence's clothes.
+    """
+    try:
+        import twice
+        s = twice.saved_again(path)
+    except Exception:
+        return False
+    return s is not None and s >= twice.PROVEN
 
 
 def why_inferior(keeper_rank, loser_rank):
@@ -1194,6 +1210,15 @@ def main(argv=None):
         # carrying the camera's block.
         untouched = 0 if (r.get('edited') or r.get('moved')) else 1
         camera = 1 if r.get('maker') else 0
+        # Whether the file itself proves it was saved again. A JPEG stores
+        # whole numbers; saving it again with a finer table can only land on
+        # some of the new ones, which leaves a comb of empty bins in the
+        # histogram that one quantization cannot produce. Read here rather
+        # than during the probe because it costs about 100ms and only matters
+        # for photographs that reached a group — which is the only place this
+        # is called from. It catches exactly the re-save that beats its own
+        # source on the rungs below: a coarser one already loses there.
+        once = 0 if _saved_again(r['path']) else 1
         upright = 1 if r.get('upright') else 0
         # How coarsely this was quantized, unbucketed. The tier rounds onto a
         # log scale, which is right for "much more compressed" and wrong here:
@@ -1206,7 +1231,7 @@ def main(argv=None):
         # definition — and without a final tiebreak the leader of their group
         # was decided by whichever the scan happened to list first, which made
         # the plan depend on directory order rather than on the photographs.
-        return (motion, fmt_score, px, untouched, camera, upright, finer,
+        return (motion, fmt_score, px, untouched, camera, once, upright, finer,
                 r.get('meta', 0), -r['tier'], r['sharp'], r['bytes'], r['path'])
 
     def matches(keeper, other):

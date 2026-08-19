@@ -276,7 +276,11 @@ depends on. Measured directly: the recovered coefficients sit a median of
 a periodicity score built on it separated a known re-save from its source in
 2 cases out of 8, which is chance.
 
-**What would work.** The same method reading the coefficients as stored, which
-means decoding the entropy-coded data rather than the pixels. That is a
-self-contained baseline JPEG reader — bounded work, no new dependency — and it
-is the one remaining route to proving the direction of a re-save.
+**What worked instead.** The same method reading the coefficients as stored,
+which meant writing a baseline JPEG reader that decodes the entropy-coded data
+rather than the pixels — `scripts/coefficients.py`, no new dependency, about
+100ms a file. On those numbers the signature is unmistakable: a histogram that
+reads `0 1 2 4 6 8 9 8 6 4 2 1 0` after one save reads `4 0 6 0 8 0 9 0 8 0 6 0
+4` after a second, finer one. This entry stays because the shortcut is the
+obvious thing to try and it cannot be made to work — the loss is in the round
+trip, not in the statistic built on it.
