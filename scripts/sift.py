@@ -1193,13 +1193,14 @@ def main(argv=None):
         px = r['w'] * r['h']
         if r['raw'] and px == 0:
             px = 10 ** 9                      # unknown sensor size still beats any export
-        # The two rungs that are evidence rather than inference. Every other
-        # rung is a property of one file — how big, how sharp, how finely
-        # quantized — and says nothing about which of two files came first.
-        # These say something happened to a file after the shutter: an editor
-        # named itself, or the clock moved off the moment of capture, or the
-        # camera's private block is missing. All three are read from EXIF that
-        # is already open.
+        # The first two of the four rungs that are evidence rather than
+        # inference — the others being the orientation flag and the comb, both
+        # below. Every remaining rung is a property of one file, how big or how
+        # sharp or how finely quantized, and says nothing about which of two
+        # files came first. These say something happened to a file after the
+        # shutter: an editor named itself, or the clock moved off the moment of
+        # capture, or the camera's private block is gone. All of it is read
+        # from EXIF that is already open.
         #
         # Below resolution, so a small edit can never beat a full-size
         # original. Above the compression rungs, because a re-save at higher
@@ -1215,6 +1216,10 @@ def main(argv=None):
     def rank_cheap(i):
         """Every rung under `once` — all of them read from the record."""
         r = recs[i]
+        # A camera records which way up it was held and leaves the pixels
+        # alone; software that turns a photograph transposes them and clears
+        # the flag. Without this a quarter-turn pair ties all the way down to
+        # file size, where the turned copy wins by about 0.1%.
         upright = 1 if r.get('upright') else 0
         # How coarsely this was quantized, unbucketed. The tier rounds onto a
         # log scale, which is right for "much more compressed" and wrong here:
