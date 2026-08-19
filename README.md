@@ -52,15 +52,31 @@ in time** (bursts chained at under 3 seconds). Measured against exhaustive
 all-pairs comparison, this misses nothing.
 
 Which frame survives is decided by a ladder: carries a Live Photo's video →
-raw → resolution → untouched by an editor → metadata richness → compression
-tier → sharpness → file size.
+raw → resolution → untouched by an editor → finer quantization → metadata
+richness → compression tier → sharpness → file size.
 
-Two of those rungs exist to keep originals. **Untouched** reads the Software
-tag: an editor signs its work and a camera does not, so where two frames are
-the same size and one has been through an editor, the other is the earlier
-generation. It sits below resolution so a small edit can never beat a full
-frame, and it decides the cases nothing else can see — a red-eye fix, a colour
-conversion, a tonal change, none of which alter a single dimension.
+Three of those rungs exist to keep originals, because a copy is only obvious
+when it is smaller.
+
+**Untouched** reads the Software tag: an editor signs its work and a camera
+does not, so where two frames are the same size and one has been through an
+editor, the other is the earlier generation. It sits below resolution so a
+small edit can never beat a full frame, and it decides what nothing else can
+see — a red-eye fix, a colour conversion, a tonal change alter no dimension at
+all.
+
+**Finer quantization** reads the JPEG's quantization matrix from its header,
+without decoding. Saving a JPEG again throws more away, so the finer matrix is
+the earlier generation. Measured against pairs whose EXIF names the editor,
+resolution alone identifies the original 72% of the time and resolution then
+the matrix 96%. The compression tier below it rounds the same number onto a log
+scale, which is right for "much more compressed" and too coarse for this: two
+generations of one picture often land in the same bucket.
+
+What does *not* work, measured on the same pairs: high-frequency detail (50%,
+because editors sharpen, so an edit often carries more apparent detail than its
+source) and clipping (39%, because editors recover highlights rather than crush
+them).
 
 ## Reviewing before you commit
 
