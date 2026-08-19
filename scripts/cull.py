@@ -678,10 +678,14 @@ def groups_from(folder, manifest):
         photos.sort(key=lambda p: (p["taken"], p["file"]))
         spread = [p["difference"] for p in photos if p["difference"] is not None]
         groups.append({"id": gid, "photos": photos,
-                       # Unknown differences lead: not knowing is the least
-                       # confident state there is.
                        "worst": max(spread) if spread else None})
-    groups.sort(key=lambda g: (g["worst"] is not None, -(g["worst"] or 0)))
+    # Biggest first: the review is where a person spends attention, and the
+    # group of twelve is where it buys the most. Ordering by least confident
+    # was right when the question was "is this cull safe" — that question now
+    # belongs to the rules, which cull only what they can prove, so what is
+    # left here is a choice about which frames to keep. Ties break on the
+    # widest difference, which is the group most worth a second look.
+    groups.sort(key=lambda g: (-len(g["photos"]), -(g["worst"] or 0)))
     return groups
 
 
@@ -1421,8 +1425,8 @@ def main():
             action, answers = review.ask_groups(
                 groups, opts["reviewdir"],
                 f"{job} — {len(groups)} groups, {n_photos} photographs",
-                "slide to step through each group; click a photograph to keep "
-                "or drop it")
+                "biggest groups first \u00b7 click a photograph to keep or drop "
+                "it \u00b7 the outlined one is the tool's pick")
             record_review(job, groups, answers, action or "closed", at)
             changed, emptied = revise_groups(opts["manifest"], groups, answers)
             if changed:

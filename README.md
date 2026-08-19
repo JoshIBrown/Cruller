@@ -85,32 +85,24 @@ pick a cull count rather than guessing at a threshold. Choosing one opens a page
 in your browser, **one section per group**: a group being the set the tool
 believes are the same photograph, of which some are to be moved.
 
-Each group shows **one photograph at a time**, filling the screen, with a slider
-underneath. Slide left for the frames taken before it, right for those after,
-and the picture changes in place. Run through a burst quickly and it plays like
-a short film — which is the point. Change between frames in the same position is
-far easier to see than difference between two frames side by side, so a moved
-hand or a blink announces itself.
+Each group shows **every photograph in it at once**, in the order they were
+taken, with the frame the tool would keep outlined. Click any photograph to
+keep or drop it; a group can end up keeping one, several, all of them — which
+refuses the group — or none, which moves the lot.
 
-Under the slider, one mark per photograph: green stays, red goes, and an
-outlined mark is the one the tool would have kept. Click the picture to change
-its mind about the frame you are looking at, or click a mark to change another.
-
-That means a group can end up keeping one, several, all of them — which refuses
-the group entirely — or none at all, which moves the lot. Groups are ordered
-least confident first, and a group whose difference could not be measured leads
-all of them, because not knowing is the least confident state there is.
+**Groups come biggest first**, because that is where attention buys the most: a
+group of twelve is eleven photographs you might not need. Safety is not the
+review's job — the rules cull only what they can prove, and everything here is
+a choice about which frames you want.
 
 **Apply** moves everything still marked to go; **Quit** moves nothing and hands
 you back the settings. Both close the page and write down every judgement, per
 photograph, because an opinion about a photograph is the one thing here that
 cannot be worked out again.
 
-**The keeper is a starting position, not a decision.** The tool marks one frame
-per group by a ladder — raw first, then resolution, metadata, compression,
-sharpness — and sharpness settles about 69% of them, which is the rung with the
-least evidence behind it. It is a good guess, not an answer, and one click
-overrides it.
+**The outlined frame is a starting position, not a decision.** See the ladder
+above for how it is chosen, and how much of that is measured rather than
+guessed.
 
 ### How often is it wrong?
 

@@ -59,24 +59,20 @@ for raws, faster for JPEGs. Comparing uses every core you have.
 A **group** is a set the tool believes are the same photograph. Some of them
 are to be moved; the review is where you decide which.
 
-**One photograph at a time**, filling the screen, with a slider underneath.
-Slide left for frames taken before it, right for those after, and the picture
-changes in place without moving. Run through a burst quickly and it plays like
-a short film — which is the point. A change between two frames in the same
-position is far easier to spot than a difference between two frames side by
-side, so a blink or a turned head announces itself. Arrow keys step one frame
-at a time.
+**Every photograph in the group at once**, in the order they were taken, with
+the frame the tool would keep outlined. Choosing between twelve frames means
+looking back and forth between them, which is why they are all on screen rather
+than one at a time.
 
-Under the slider is one mark per photograph — green stays, red goes, and an
-outlined mark is the one the tool would have kept. **Click the picture** to
-change your mind about the frame you are looking at, or **click a mark** to
-change another. The line below always says which frame you are on, its size,
-and when it was taken.
+**Click any photograph** to keep or drop it — green outline stays, red goes,
+and the dimmed ones are leaving. *Keep all* refuses the group entirely; *keep
+none* moves the lot. The caption under each frame gives its time and size.
 
-So a group can end up keeping one, several, all of them — refusing the group —
-or none, which moves the lot. Groups come least confident first, and one whose
-difference could not be measured leads them all, because not knowing is the
-least confident state there is.
+**Groups come biggest first.** That is where your attention buys the most: a
+group of twelve is eleven photographs you may not need. Ordering by risk would
+be the wrong idea, because risk is not what the review handles — the rules cull
+only what they can prove, and what reaches you here is a choice about which
+frames you want to keep.
 
 At the bottom: **Apply** moves everything still marked to go, **Quit** moves
 nothing and hands you back the settings. Both close the page and write down

@@ -12,6 +12,7 @@ hint at which frame the tool chose.
 It runs on a local address, serving only the folder being judged, and stops the
 moment the page answers.
 """
+import datetime
 import hashlib
 import html
 import shutil
@@ -416,46 +417,49 @@ def ask(pairs, out_dir, title, subtitle, blind=False,
 
 
 def _group_page(groups, thumbs, title, subtitle, where="img"):
-    """One section per group: the photograph, and a slider through the rest."""
+    """One section per group, every photograph in it visible at once.
+
+    Biggest groups first, because that is where a person's attention buys the
+    most, and chronological inside each, because that is the order they were
+    taken and the order a change makes sense in.
+
+    Every frame is on screen together rather than one at a time. Comparing
+    twelve frames means looking back and forth between them, which a view
+    showing one at a time makes impossible however easy it is to step through.
+    """
     blocks = []
     for gi, g in enumerate(groups):
         photos = [p for p in g["photos"] if thumbs.get(p["path"])]
         if len(photos) < 2:
             continue
-        start = next((i for i, p in enumerate(photos) if p["keep"]), 0)
-        frames, strip = [], []
+        cards = []
         for i, p in enumerate(photos):
-            on = " class=\"on\"" if i == start else ""
-            frames.append(
-                f'<img src="{where}/{thumbs[p["path"]]}" data-i="{i}"{on}>')
-            strip.append(
-                f'<button type="button" class="tick" data-i="{i}"'
-                f' onclick="toggle({gi},{i})" title="{html.escape(p["file"])}">'
-                f'<span></span></button>')
+            when = datetime.datetime.fromtimestamp(p["taken"]).strftime(
+                "%H:%M:%S") if p["taken"] else ""
+            cards.append(f"""
+    <figure class="shot" data-i="{i}" onclick="toggle({gi},{i})">
+      <img src="{where}/{thumbs[p['path']]}" loading="lazy">
+      <figcaption><span class="tick"></span>{when}
+        <span class="dim">{p['dimensions']}</span></figcaption>
+    </figure>""")
         gap = photos[-1]["taken"] - photos[0]["taken"]
-        over = ("" if gap <= 0 else
-                f" · over {gap:.0f}s" if gap < 90 else
-                f" · over {gap / 60:.0f} min")
+        over = ("" if gap <= 0 else f" over {gap:.0f}s" if gap < 90 else
+                f" over {gap / 60:.0f} min")
         blocks.append(f"""
 <section class="group" data-g="{gi}" data-n="{len(photos)}">
   <div class="head"><span class="num">{gi + 1}</span>
     <span class="why">{len(photos)} photographs{over}</span>
-    <span class="state" id="t{gi}"></span></div>
-  <div class="stage" id="s{gi}" onclick="toggle({gi})">{''.join(frames)}
-    <div class="tag" id="g{gi}"></div></div>
-  <input type="range" class="scrub" min="0" max="{len(photos) - 1}"
-         value="{start}" oninput="show({gi}, +this.value)"
-         onchange="show({gi}, +this.value)">
-  <div class="strip">{''.join(strip)}</div>
-  <div class="foot"><span id="f{gi}"></span>
-    <input id="r{gi}" placeholder="anything worth noting? (optional)"
-           oninput="note({gi})"></div>
+    <span class="state" id="t{gi}"></span>
+    <button type="button" class="all" onclick="all({gi},true)">keep all</button>
+    <button type="button" class="all" onclick="all({gi},false)">keep none</button>
+  </div>
+  <div class="shots">{''.join(cards)}</div>
+  <input id="r{gi}" class="note" placeholder="anything worth noting? (optional)"
+         oninput="note({gi})">
 </section>""")
 
     state = json.dumps([[{"file": p["file"], "keep": p["keep"],
-                          "why": p["why"], "when": p["taken"],
-                          "size": p["size"], "dim": p["dimensions"],
-                          "chosen": p["keep"]}
+                          "chosen": p["keep"], "why": p["why"]}
                          for p in g["photos"] if thumbs.get(p["path"])]
                         for g in groups])
     return f"""<meta charset="utf-8"><meta name="viewport"
@@ -468,32 +472,31 @@ def _group_page(groups, thumbs, title, subtitle, where="img"):
           padding:14px 20px; border-bottom:1px solid #2a2a30; z-index:5 }}
  h1 {{ font-size:17px; margin:0 }} .sub {{ color:#9a9aa2; font-size:13px; margin-top:2px }}
  .group {{ padding:16px 20px 20px; border-bottom:1px solid #23232a }}
- .head {{ display:flex; gap:12px; align-items:baseline; margin-bottom:8px }}
+ .head {{ display:flex; gap:12px; align-items:center; margin-bottom:10px }}
  .num {{ color:#6f6f78; font-variant-numeric:tabular-nums }}
- .why {{ color:#c9c9d1 }} .state {{ margin-left:auto; font-size:13px; color:#9a9aa2 }}
- /* Every frame sits in the same box, one visible, so sliding replaces the
-    picture without moving it — the difference is then the only thing moving. */
- .stage {{ position:relative; height:62vh; background:#0e0e11; border-radius:6px;
-          overflow:hidden; cursor:pointer }}
- .stage img {{ position:absolute; inset:0; margin:auto; max-width:100%;
-              max-height:100%; display:none }}
- .stage img.on {{ display:block }}
- .stage.keep {{ outline:3px solid #3d8a4b; outline-offset:-3px }}
- .stage.cull {{ outline:3px solid #7a3b3b; outline-offset:-3px }}
- .tag {{ position:absolute; left:10px; top:10px; padding:3px 9px; border-radius:4px;
-        font-size:12px; background:#000a; color:#e8e8ea }}
- .scrub {{ width:100%; margin:12px 0 6px; accent-color:#4ea1ff }}
- .strip {{ display:flex; gap:3px }}
- .tick {{ flex:1; height:16px; padding:0; border:0; background:none; cursor:pointer }}
- .tick span {{ display:block; height:6px; border-radius:3px; background:#3a3a44 }}
- .tick.keep span {{ background:#3d8a4b }} .tick.cull span {{ background:#7a3b3b }}
- .tick.here span {{ height:12px; margin-top:-3px }}
- .tick.chosen span {{ box-shadow:0 0 0 2px #e8e8ea inset }}
- .foot {{ display:flex; gap:10px; align-items:center; margin-top:10px;
-         color:#8a8a93; font-size:12px }}
- input[type=text], .foot input {{ background:#1d1d23; color:#e8e8ea;
-   border:1px solid #33333b; border-radius:5px; padding:6px 9px; font-size:13px;
-   flex:1; min-width:180px }}
+ .why {{ color:#c9c9d1 }}
+ .state {{ margin-left:auto; font-size:13px; color:#9a9aa2 }}
+ .all {{ background:#26262e; color:#c9c9d1; border:1px solid #37373f;
+        border-radius:5px; padding:3px 9px; font-size:12px; cursor:pointer }}
+ /* Every frame of the group at once: choosing between twelve means looking
+    back and forth, which one-at-a-time makes impossible. */
+ .shots {{ display:grid; gap:8px;
+          grid-template-columns:repeat(auto-fill,minmax(210px,1fr)) }}
+ figure {{ margin:0; cursor:pointer; border-radius:6px; overflow:hidden;
+          background:#0e0e11; outline:3px solid transparent; outline-offset:-3px }}
+ figure img {{ width:100%; aspect-ratio:4/3; object-fit:cover; display:block }}
+ figure.keep {{ outline-color:#3d8a4b }} figure.cull {{ outline-color:#7a3b3b }}
+ figure.cull img {{ opacity:.45 }}
+ figcaption {{ font-size:11px; color:#8a8a93; padding:4px 7px;
+              display:flex; gap:6px; align-items:center }}
+ .dim {{ margin-left:auto }}
+ .tick {{ width:9px; height:9px; border-radius:50%; background:#7a3b3b }}
+ figure.keep .tick {{ background:#3d8a4b }}
+ figure.chosen figcaption {{ color:#e8e8ea }}
+ figure.chosen .tick {{ box-shadow:0 0 0 2px #e8e8ea }}
+ .note {{ width:100%; margin-top:9px; background:#1d1d23; color:#e8e8ea;
+         border:1px solid #33333b; border-radius:5px; padding:6px 9px;
+         font-size:13px; box-sizing:border-box }}
  footer {{ position:sticky; bottom:0; background:#16161aee; backdrop-filter:blur(6px);
           border-top:1px solid #2a2a30; padding:12px 20px; display:flex; gap:10px;
           align-items:center }}
@@ -514,72 +517,29 @@ def _group_page(groups, thumbs, title, subtitle, where="img"):
 <div id="done"></div>
 <script>
 const G = {state};
-const AT = G.map((g, i) => Math.max(0, g.findIndex(p => p.chosen)));
 const NOTE = {{}};
-
-function show(gi, i) {{
-  AT[gi] = i;
-  const box = document.getElementById('s' + gi);
-  box.querySelectorAll('img').forEach(im =>
-    im.classList.toggle('on', +im.dataset.i === i));
-  paint(gi);
-}}
-function toggle(gi, i) {{
-  if (i === undefined) i = AT[gi];        // clicking the photo toggles the one shown
-  G[gi][i].keep = !G[gi][i].keep;
-  paint(gi);
-}}
+function toggle(gi, i) {{ G[gi][i].keep = !G[gi][i].keep; paint(gi); }}
+function all(gi, keep) {{ G[gi].forEach(p => p.keep = keep); paint(gi); }}
 function note(gi) {{ NOTE[gi] = document.getElementById('r' + gi).value; }}
-
-function when(t) {{
-  return t ? new Date(t * 1000).toLocaleString() : '';
-}}
 function paint(gi) {{
-  const g = G[gi], i = AT[gi], p = g[i];
-  const box = document.getElementById('s' + gi);
-  box.classList.toggle('keep', p.keep);
-  box.classList.toggle('cull', !p.keep);
-  document.getElementById('g' + gi).textContent =
-    (p.keep ? 'keeping' : 'moving out') + (p.chosen ? ' · the tool chose this one' : '');
+  const g = G[gi];
+  document.querySelectorAll(`[data-g="${{gi}}"] .shot`).forEach(el => {{
+    const p = g[+el.dataset.i];
+    el.classList.toggle('keep', p.keep);
+    el.classList.toggle('cull', !p.keep);
+    el.classList.toggle('chosen', p.chosen);
+  }});
   const kept = g.filter(x => x.keep).length;
   document.getElementById('t' + gi).textContent =
     kept === 0 ? 'all of them go' :
     kept === g.length ? 'all of them stay' : `${{kept}} of ${{g.length}} stay`;
-  document.getElementById('f' + gi).textContent =
-    `${{i + 1}}/${{g.length}} · ${{p.file}} · ${{p.dim}} · ${{p.size}} MB` +
-    (p.why ? ` · ${{p.why}}` : '') + ` · ${{when(p.when)}}`;
-  document.querySelectorAll(`[data-g="${{gi}}"] .tick`).forEach(t => {{
-    const n = +t.dataset.i;
-    t.classList.toggle('keep', g[n].keep);
-    t.classList.toggle('cull', !g[n].keep);
-    t.classList.toggle('here', n === i);
-    t.classList.toggle('chosen', g[n].chosen);
-  }});
   let moved = 0, groups = 0;
   G.forEach(gg => {{ const m = gg.filter(x => !x.keep).length;
                     moved += m; if (m) groups++; }});
   document.getElementById('tally').textContent =
     `${{moved}} to move, from ${{groups}} group${{groups === 1 ? '' : 's'}}`;
 }}
-// Arrow keys step the group under the pointer: a frame at a time is how you
-// see what moved, and a slider drag overshoots.
-document.addEventListener('keydown', e => {{
-  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-  const sec = document.querySelector('.group:hover') ||
-              [...document.querySelectorAll('.group')].find(s => {{
-                const r = s.getBoundingClientRect();
-                return r.top < innerHeight / 2 && r.bottom > innerHeight / 2;
-              }});
-  if (!sec) return;
-  const gi = +sec.dataset.g, n = +sec.dataset.n;
-  const i = Math.min(n - 1, Math.max(0, AT[gi] + (e.key === 'ArrowRight' ? 1 : -1)));
-  sec.querySelector('.scrub').value = i;
-  show(gi, i);
-  e.preventDefault();
-}});
 function finish(action) {{
-  // Only groups that were actually drawn. A group with too few readable
-  // frames has no section, so nobody saw it and it gets no verdict from here.
   const answers = {{}};
   document.querySelectorAll('.group').forEach(sec => {{
     const i = +sec.dataset.g;

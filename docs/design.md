@@ -228,22 +228,21 @@ these are the same photograph, so which of them survives? Nothing is left out �
 a relationship the tool can prove is still a photograph leaving, and a proof
 nobody looked at is only a claim.
 
-**One photograph on screen, and a slider through the rest.** The frames of a
-group sit in the same box, one visible, ordered by capture time; sliding
-replaces the picture without moving it. Scrubbing a burst then plays it like a
-short film.
+**Every photograph of a group on screen together.** Choosing between twelve
+frames means looking back and forth between them, comparing this one against
+that one and back again. A view showing one at a time makes that impossible
+however easy it is to step through — the comparison happens in memory rather
+than on the page, which is where it is least reliable.
 
-This is the point of the design rather than a flourish. Two frames side by side
-ask the eye to compare across a gap, which is what makes a moved hand or a
-half-blink easy to miss at page size. The same two frames alternating in one
-position turn that difference into motion, which vision detects far more
-readily — the technique that found Pluto on photographic plates. It also scales
-where side-by-side does not: a group of twelve is one section and one gesture,
-not eleven pairings that repeat the keeper in every one.
+They are ordered by capture time inside the group, because that is the order
+they happened in and the order a change makes sense in.
 
-**Pairs were the earlier shape and misrepresented the data.** A group of six
-rendered as five sections, the same keeper in all of them, and a person
-disagreeing about which frame to keep had to express it five times.
+**Biggest groups first.** The review is where a person spends attention, and
+the group of twelve is where it buys the most: eleven photographs that might
+not be needed, against one in a pair. Ordering by least confident would put the
+riskiest first, which is the right instinct for a review that decides safety —
+and this one does not. The rules cull only what they can prove; what arrives
+here is a choice about which frames are wanted.
 
 **A verdict per photograph, not per pair.** Clicking the picture changes the
 frame on screen; clicking a mark below changes another. A group can therefore
