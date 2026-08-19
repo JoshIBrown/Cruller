@@ -26,6 +26,32 @@ from sift import progress
 THUMB_LONG = 1100          # generous: the point is to see whether it is a duplicate
 
 
+def _srgb(im):
+    """Convert to sRGB, because that is what the page will be read as.
+
+    A phone writes its JPEGs in Display P3 and tags them; the same picture as
+    HEIC arrives untagged. Writing both without a profile hands the browser two
+    sets of numbers it reads alike, which is only correct for one of them.
+
+    The shift this removes is small — a fraction of a level on the pairs
+    measured — so it is a correctness fix rather than a visible one. It matters
+    because the page exists to be judged by eye, and a difference the review
+    introduces is indistinguishable from one the photographs have.
+    """
+    icc = im.info.get("icc_profile")
+    im = im.convert("RGB")
+    if not icc:
+        return im
+    try:
+        import io
+        from PIL import ImageCms
+        return ImageCms.profileToProfile(
+            im, ImageCms.ImageCmsProfile(io.BytesIO(icc)),
+            ImageCms.createProfile("sRGB"), outputMode="RGB") or im
+    except Exception:
+        return im            # an unreadable profile is not worth losing the page over
+
+
 def _thumbs(pairs, out_dir):
     """One image per file, however many pairs name it."""
     made = {}
@@ -41,7 +67,7 @@ def _thumbs(pairs, out_dir):
                 continue
             name = f"{len(made):04d}.jpg"
             try:
-                im = open_image(path).convert("RGB")
+                im = _srgb(open_image(path))
                 im.thumbnail((THUMB_LONG, THUMB_LONG))
                 im.save(os.path.join(out_dir, name), quality=86)
                 made[path] = name
@@ -144,10 +170,13 @@ def _serve(out_dir):
     return answer.get("action"), answer
 
 
-def _page(pairs, thumbs, title, subtitle, blind=False, details=None):
+def _page(pairs, thumbs, title, subtitle, blind=False, details=None,
+          verdicts=("The same photograph", "Different photographs")):
     foot = BLIND_FOOT if blind else JUDGE_FOOT
     blind_js = "true" if blind else "false"
     details = details or {}
+    yes, no = verdicts
+    yes_js, no_js = json.dumps(yes.lower()), json.dumps(no.lower())
     rows = []
     for n, p in enumerate(pairs):
         ka, kb = thumbs.get(p["keeper_path"]), thumbs.get(p["culled_path"])
@@ -177,8 +206,8 @@ def _page(pairs, thumbs, title, subtitle, blind=False, details=None):
       <img src="img/{kb}" loading="lazy"></a></figure>
   </div>{spot}
   <div class="acts">
-    <button type="button" onclick="same({n})">The same photograph</button>
-    <button type="button" onclick="differ({n})">Different photographs</button>
+    <button type="button" onclick="same({n})">{yes}</button>
+    <button type="button" onclick="differ({n})">{no}</button>
     <input id="r{n}" placeholder="anything worth noting? (optional)"
            oninput="note({n})">
   </div>
@@ -268,7 +297,7 @@ function paint(n) {{
   el.classList.toggle('swapped', a.swapped && !a.denied);
   const kin = el.querySelectorAll('.kin').length;
   document.getElementById('s' + n).textContent = BLIND
-    ? (a.denied ? 'different' : (a.swapped ? 'the same' : ''))
+    ? (a.denied ? {no_js} : (a.swapped ? {yes_js} : ''))
     : (a.denied ? 'will not be culled'
                 : (a.swapped ? (kin ? 'this one becomes the keeper'
                                     : 'the other one goes')
@@ -276,7 +305,7 @@ function paint(n) {{
   const d = Object.values(A).filter(x => x.denied).length;
   const s = Object.values(A).filter(x => x.swapped && !x.denied).length;
   document.getElementById('tally').textContent = BLIND
-    ? `${{d + s}} of {len(pairs)} judged · ${{d}} different, ${{s}} the same`
+    ? `${{d + s}} of {len(pairs)} judged · ${{d}} / ${{s}}`
     : `${{d}} refused · ${{s}} turned round`;
 }}
 function group(n) {{
@@ -323,7 +352,8 @@ function finish(action) {{
 </script>"""
 
 
-def ask(pairs, out_dir, title, subtitle, blind=False):
+def ask(pairs, out_dir, title, subtitle, blind=False,
+        verdicts=("The same photograph", "Different photographs")):
     """Show the page, wait for an answer, return it.
 
     Returns `(action, answers)` where action is "apply", "quit" or "audit", or
@@ -335,7 +365,8 @@ def ask(pairs, out_dir, title, subtitle, blind=False):
     thumbs = _thumbs(pairs, img_dir)
     details = _details(pairs, img_dir) if blind else {}
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as fh:
-        fh.write(_page(pairs, thumbs, title, subtitle, blind, details))
+        fh.write(_page(pairs, thumbs, title, subtitle, blind, details,
+                       verdicts))
 
     _, answer = _serve(out_dir)
 
