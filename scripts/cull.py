@@ -1098,6 +1098,10 @@ def _label(job, stamp, outcome):
             if fresh:
                 w.writerow(header)
             rows = list(csv.DictReader(open(reviewed)))
+            # A review written before the ledger changed shape has different
+            # columns. Its judgements are real and are kept as they are; only
+            # the ones this ledger can read are folded in.
+            rows = [r for r in rows if header[2] in r and header[3] in r]
             # Only the pass that was acted on. Looking at one setting and then
             # another appends both, and marking the abandoned one "applied"
             # would put culls in the ledger that never happened.
@@ -1263,10 +1267,6 @@ def undo(job, hint=True):
         restored += 1
     os.rename(log, os.path.join(DEFAULT_RECORDS, f"{job} - log (undone).csv"))
     prune_empty(os.path.join(DEFAULT_CULL, job))
-    # An undo takes the approval back; the label record should say so rather
-    # than keep claiming those culls were endorsed.
-    _label(job, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-           "retracted by undo")
     print(f"\n  restored {restored:,} of {len(rows):,}")
     if missing:
         print(f"  {missing:,} already gone")
@@ -1274,6 +1274,14 @@ def undo(job, hint=True):
         print(f"  {occupied:,} skipped \u2014 something is already there")
     if hint:
         print("  the plan stands; --apply would move them again")
+    # The photographs are back and said to be back before any of this runs. An
+    # undo's job is to move files; bookkeeping that fails afterwards must not
+    # be able to make a finished undo look like a crash.
+    try:
+        _label(job, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+               "retracted by undo")
+    except Exception as e:
+        print(f"  \u26a0 the label ledger was not updated: {str(e)[:60]}")
     refresh_dashboard()
 
 
