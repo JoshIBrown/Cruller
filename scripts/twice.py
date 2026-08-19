@@ -10,6 +10,13 @@ so a comb is evidence rather than a preference.
 This reads the integers as stored — see coefficients.py for why decoding to
 pixels first destroys them.
 
+It is silent on about one file in seventy, where the picture is too smooth at
+low frequencies to build a histogram wide enough for a period to show. That is
+a property of the photograph rather than of the saving, so it cannot be
+predicted from the quantization table — the few silent files measured were
+finely quantized, not coarsely. When it is silent the rung says nothing and the
+compression rungs decide, as they did before it existed.
+
 It only detects the finer-second-pass case. Saving again more coarsely collapses
 values together instead, which leaves a narrower histogram and no comb, and is
 indistinguishable from a photograph that simply had less detail. That is the
