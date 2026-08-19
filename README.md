@@ -28,6 +28,12 @@ cheap ones only ever say *no*:
    frame warped onto the other, and the residual read in blocks of 1/200th of
    the long edge. Warping absorbs camera movement, so what is left is the
    *scene* changing rather than the photographer.
+5. **A closer look**, at 3200px, for pairs the full look called duplicates.
+   Some photographs are all fine detail — a page of print, a page of music —
+   and at 1600 the characters are a few pixels tall and average away, so two
+   different pages align beautifully because their margins do. Only a positive
+   *different* overturns the earlier answer; where the closer look cannot tell,
+   it says nothing. Paid only by pairs already judged duplicates.
 
 A pair is a duplicate when that residual sits under one limit, which you move
 on a dial from 0 to 100. There is no second limit and no subject detector — the

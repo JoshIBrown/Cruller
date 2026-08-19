@@ -82,6 +82,7 @@ Candidates pass through four tests, cheapest first. Only the last one may say
 | Rough overlay | 0.3 ms | Aligns two 256×144 sketches by phase correlation and compares them. Rejects about 99% of candidates. |
 | Keypoint screen | 20 ms | 400 ORB features. Catches copies that were rotated or heavily cropped, which look nothing alike at sketch size. |
 | Full look | 60 ms | The real decision, below. |
+| Closer look | 190 ms | Only for pairs the full look called duplicates. Repeats the decision at 3200px, where fine detail survives, and drops the pair if it now reads as a different scene. |
 
 The rough overlay may only reject. Anything it lets through is confirmed
 properly, so a cheap test can never cause a cull on its own.

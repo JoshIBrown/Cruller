@@ -50,9 +50,11 @@ re-read; a file that changed is. Every cache entry carries a version, and any
 change to what is stored must raise it: a cache that answers with a stale shape
 is worse than no cache at all.
 
-**A cheap test may only reject.** The sketch and the keypoint screen exist to
-say no quickly. Only the full comparison may say yes, so a cull never rests on
-a shortcut.
+**Only one test may say yes; any test may say no.** The sketch and the keypoint
+screen exist to reject quickly, so a cull never rests on a shortcut. The full
+look is the only stage that grants membership — and the closer look, at a
+resolution that keeps fine detail, may withdraw it. A pair therefore needs
+every stage to agree, and one dissent is enough to keep both photographs.
 
 **No alignment, no cull.** A pair too dark or too flat to align reliably is
 kept, both frames. A crash during comparison is not a verdict: it is counted
