@@ -183,11 +183,10 @@ pair had been given. Curating the folder does the same job and can be seen.
 
 Rather than asking you to guess a number, a run offers the settings as a list,
 each described by what it offers rather than what it takes: how many groups it
-makes, how many photographs are in them, what would move if every one of the
-tool's picks were accepted, and the space that would free. That last count is
-one frame kept per group, so it is neither a floor nor a ceiling — keeping a
-second frame moves fewer, emptying a group moves more — and the menu says so
-rather than the column pretending to a bound it does not have. Nothing in the list is settled — a setting decides how widely
+makes, and how many photographs are in them. Nothing more, because nothing more
+is known — how many would move and how much that frees both assume every one of
+the tool's picks is accepted, which is precisely the question the review exists
+to ask. Nothing in the list is settled — a setting decides how widely
 to group, and which frames survive a group is decided by a person — so a count
 of culls would describe an outcome nobody has agreed to.
 

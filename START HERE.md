@@ -270,10 +270,10 @@ reach it immediately; only a change to the drop-handling inside
       > a
       21 copies moved · 118 MB
       working out options   4s
-      1    10 groups    20 photographs    10 would go     14 MB
-      2    44 groups    94 photographs    50 would go    191 MB
-      3    89 groups   209 photographs   120 would go    704 MB
-      [1-3] review  ·  [q]uit   (keeping one from each group)
+      1    10 groups    20 photographs
+      2    44 groups    94 photographs
+      3    89 groups   209 photographs
+      [1-3] review  ·  [q]uit
       > 2
       review open in your browser — http://127.0.0.1:52118/index.html
       you changed 6 verdict(s)

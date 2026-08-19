@@ -91,16 +91,15 @@ strangely until they are gone.
 **Then the grouping.** You are offered the settings the dial can produce, each
 described by what it puts in front of you rather than what it would take:
 
-    1    10 groups    20 photographs    10 would go     14 MB
-    2    44 groups    94 photographs    50 would go    191 MB
-    3    89 groups   209 photographs   120 would go    704 MB
-    [1-3] review  ·  [q]uit   (keeping one from each group)
+    1    10 groups    20 photographs
+    2    44 groups    94 photographs
+    3    89 groups   209 photographs
+    [1-3] review  ·  [q]uit
 
-Nothing there is settled. The last count is what moves if you accept the tool's
-pick everywhere — one frame kept per group — which is neither a floor nor a
-ceiling: keeping a second frame moves fewer, and emptying a group moves the
-whole thing. Choosing a setting opens a page in your browser, **one section per
-group**, and which frames survive is yours to say.
+Nothing there is settled, so the list says only how much there is to look at.
+How many would go, and how much that frees, depend on which frames you keep —
+which is the question the review asks. Choosing a setting opens a page in your
+browser, **one section per group**, and the answer is yours.
 
 Each group shows **every photograph in it at once**, in the order they were
 taken, with the frame the tool would keep outlined. Click any photograph to

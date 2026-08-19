@@ -452,25 +452,20 @@ def show_outcomes(found, n_files, at):
     """The list to pick from, described as what it offers rather than takes.
 
     A setting decides how widely to group, not how much to cull: the person
-    chooses which frames survive each group, so nothing here is settled.
-
-    The last count is what moves if every one of the tool's picks is accepted —
-    one frame kept per group — which is neither a floor nor a ceiling. Keeping
-    a second frame moves fewer; emptying a group moves the whole thing,
-    including the frame the tool chose.
+    chooses which frames survive each group, so nothing here is settled. How
+    many would go and how much that frees are answers to a question nobody has
+    been asked yet — they assume every one of the tool's picks is accepted —
+    so the list says only how much there is to look at.
     """
     # Widths are sized to this run, so a small folder does not read as a row of
     # gaps and a large one still lines up.
     gw = max(len(f"{g:,}") for _, _, _, _, g in found)
     sw = max(len(f"{p:,}") for _, _, _, p, _ in found)
-    cw = max(len(f"{n:,}") for _, n, _, _, _ in found)
     for i, (lim, n, freed, shown, groups) in enumerate(found, 1):
         mark = "   \u2190 reviewing" if at is not None and i == at else ""
         word = "group " if groups == 1 else "groups"
         print(f"    {i}   {groups:>{gw},} {word}"
-              f"   {shown:>{sw},} photographs"
-              f"   {n:>{cw},} would go"
-              f"   {size_text(freed):>7}{mark}")
+              f"   {shown:>{sw},} photographs{mark}")
 
 
 def ask_next(found, n_files, at):
@@ -487,10 +482,7 @@ def ask_next(found, n_files, at):
     keys["q"] = "quit"
     offer = [f"[1-{len(found)}] review" if len(found) > 1 else "[1] review",
              "[q]uit"]
-    # Said once, so the last column does not have to carry it: the count is
-    # what goes if the tool's pick is accepted everywhere, and the review is
-    # where that is agreed to or changed.
-    print("  " + "  \u00b7  ".join(offer) + "   (keeping one from each group)")
+    print("  " + "  \u00b7  ".join(offer))
     while True:
         try:
             pick = read_key()
