@@ -728,6 +728,81 @@ def revise_groups(manifest, groups, answers):
     return changed, emptied
 
 
+def copies_first(folder, opts, session, job, a):
+    """Settle the copies before anything is grouped. Returns False to stop.
+
+    Two jobs, and only the second needs judgement. A copy is a copy — the
+    picture is the same one, and which file holds it is a question about
+    filenames rather than photographs — so those are settled first, on their
+    own, with the reasons named. What survives goes on to be grouped, where
+    every remaining decision is a matter of taste.
+
+    Separating them also keeps the grouping honest: a folder holding three
+    copies of every photograph groups strangely until they are gone.
+    """
+    # Every copy, not only the ones that need no dial. A resave and a smaller
+    # copy are as much "the same picture in another file" as an exact copy is,
+    # but their labels are only given once a pair is already a member — so
+    # asking at the floor would find the provable derivations and miss those.
+    # Judged at the default and then filtered to what the rules can name.
+    session["result"] = session["regroup"](sift.DUP_BLOCK, sift.DUP_RATIO)
+    groups = []
+    for g in groups_from(folder, opts["manifest"]):
+        copies = [p for p in g["photos"] if p["keep"] or p["why"] in MECHANICAL]
+        if len(copies) > 1 and any(not p["keep"] for p in copies):
+            groups.append(dict(g, photos=copies))
+    n = sum(sum(1 for p in g["photos"] if not p["keep"]) for g in groups)
+    if not n:
+        return True
+
+    why = defaultdict(int)
+    for g in groups:
+        for photo in g["photos"]:
+            if not photo["keep"]:
+                why[photo["why"]] += 1
+    freed = sum(float(r["MB"] or 0) for r in csv.DictReader(open(opts["manifest"]))
+                if r["verdict"] == "REDUNDANT") * 1e6
+    print(f"\n  {n:,} cop{'y' if n == 1 else 'ies'} \u00b7 {size_text(freed)} "
+          f"\u00b7 the same picture in more than one file")
+    for kind, count in sorted(why.items(), key=lambda x: -x[1]):
+        print(f"      {count:>4}  {kind}")
+    print("  [a]pply  \u00b7  [l]ook first  \u00b7  [s]kip  \u00b7  [q]uit")
+
+    while True:
+        try:
+            key = read_key()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return False
+        if key in ("a", "l", "s", "q"):
+            print(f"  > {key}")
+            break
+    if key == "q":
+        return False
+    if key == "s":
+        return True
+    if key == "l":
+        action, answers = review.ask_groups(
+            groups, opts["reviewdir"], f"{job} \u2014 {n:,} copies",
+            "the same picture in more than one file \u00b7 the reason each "
+            "one goes is under it")
+        record_review(job, groups, answers, action or "closed", "copies")
+        changed, _ = revise_groups(opts["manifest"], groups, answers)
+        if changed:
+            print(f"  you changed {changed} verdict(s)")
+        if action != "apply":
+            print("  no copies moved")
+            return True
+
+    moved, freed, extra = apply_moves(
+        folder, opts["manifest"], DEFAULT_CULL,
+        os.path.join(DEFAULT_RECORDS, job + " - thumbnails"), job)
+    refresh_dashboard()
+    print(f"  {moved:,} cop{'y' if moved == 1 else 'ies'} moved \u00b7 "
+          f"{size_text(freed)}{extra}")
+    return True
+
+
 def record_review(job, groups, answers, action, setting):
     """Keep every judgement, whether or not anything moved.
 
@@ -1401,6 +1476,9 @@ def main():
         # No options list is coming, so this is the only account of the run.
         wait_to_close(f"cull {total_pairs:,} \u00b7 {apply_hint}")
     elif interactive:
+        if not copies_first(folder, opts, session, job, a):
+            return
+        session = analyse(folder, opts) or session
         found = outcomes(session, opts["manifest"])
         if not found:
             print(f"  nothing to cull at any setting \u00b7 {apply_hint}")
