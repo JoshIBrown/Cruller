@@ -261,17 +261,23 @@ reach it immediately; only a change to the drop-handling inside
     ● 2020.01 - NYC
       reading photos    [############--------------------]  38%  1,900/5,000   1m20s left
       comparing photos  [################################] 100%  145/145      2m04s
+      21 copies · 118 MB · the same picture in more than one file
+             8  cropped copy
+             7  resave
+             5  smaller copy
+             1  rotated copy
+      [a]pply  ·  [l]ook first  ·  [s]kip  ·  [q]uit
+      > a
+      21 copies moved · 118 MB
       working out options   4s
-      1   cull 18 of 145   12.4% of the folder   0.7 GB
-      2   cull 23 of 145   15.9% of the folder   0.9 GB
-      3   cull 31 of 145   21.4% of the folder   1.4 GB
-      4   cull 44 of 145   30.3% of the folder   1.9 GB
-      5   cull 51 of 145   35.2% of the folder   2.2 GB
-      [1-5] review  ·  [q]uit
+      1    10 groups    20 photographs   up to  10 can go     14 MB
+      2    44 groups    94 photographs   up to  50 can go    191 MB
+      3    89 groups   209 photographs   up to 120 can go    704 MB
+      [1-3] review  ·  [q]uit
       > 2
       review open in your browser — http://127.0.0.1:52118/index.html
-      you refused 2 · turned 1 round
-      done · 21 moved · 0.8 GB · Photo Bin holds 12.4 GB
+      you changed 6 verdict(s)
+      done · 44 moved · 0.9 GB · Photo Bin holds 12.4 GB
 
 The options come first; the review page opens once you pick one. The choice of
 setting is a single keypress — no Enter — and everything after that happens in

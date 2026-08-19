@@ -96,7 +96,7 @@ def undo_from_drop(folder, no_prompt=False):
                     print(f"    {j}")
             return True
         if state:
-            print(f"  that is {state} \u2014 nothing to cull.")
+            print(f"  that is {state} \u2014 nothing to look through.")
             return True
         return False                           # not ours; carry on and cull it
 
@@ -307,6 +307,19 @@ def outcomes(session, manifest):
             r["judged"] = len(rows)
             r["limit"] = limit
             r["rows"] = rows
+            # What the review will actually hold. A setting offers groups to
+            # decide about, so that is what it is described by.
+            held = {x["group"] for x in csv.DictReader(open(manifest))
+                    if x["group"] != ""
+                    and any(y["group"] == x["group"] and y["verdict"] == "REDUNDANT"
+                            for y in [x])}
+            in_groups = defaultdict(int)
+            for x in csv.DictReader(open(manifest)):
+                if x["group"] != "":
+                    in_groups[x["group"]] += 1
+            live = {x["group"] for x in rows}
+            r["groups"] = len(live)
+            r["shown"] = sum(in_groups[g] for g in live)
             seen[key] = r
             part[0] = 0.0                     # that setting is done; start the next
             draw()
@@ -394,12 +407,25 @@ def outcomes(session, manifest):
     # whose cull counts sit closest to evenly spaced — which is the spacing
     # somebody is choosing along.
     weighed = sorted((seen[k]["limit"], seen[k]["redundant"], seen[k]["freed"],
-                      seen[k]["judged"]) for k in seen)
+                      seen[k]["shown"], seen[k]["groups"]) for k in seen)
+    if not weighed:
+        return []
+    # A setting holding no groups is not a choice. The lowest one is usually
+    # empty once the copies have been settled, because settling them is what it
+    # would have offered.
+    weighed = [w for w in weighed if w[4]]
     if not weighed:
         return []
     ends = [weighed[0], weighed[-1]]
-    inner = [w for w in weighed[1:-1] if w[1] != weighed[0][1]
-             and w[1] != weighed[-1][1]]
+    # One row per distinct answer. Settings differing only in their limit are
+    # the same choice written twice, whether they tie with an end or with each
+    # other — a list offering "2 of 15" three times asks a question that has
+    # only one answer.
+    inner, seen_counts = [], {weighed[0][1], weighed[-1][1]}
+    for w in weighed[1:-1]:
+        if w[1] not in seen_counts:
+            seen_counts.add(w[1])
+            inner.append(w)
     picks = []
     steps = MAX_OPTIONS - 2
     low, high = weighed[0][1], weighed[-1][1]
@@ -409,20 +435,38 @@ def outcomes(session, manifest):
         if not left:
             break
         picks.append(min(left, key=lambda w: abs(w[1] - target)))
-    return sorted(ends[:1] + picks + ends[1:])
+    # Last word on repetition: two settings are the same choice when they offer
+    # the same groups, whatever limit produced them — including the two ends,
+    # which are kept for their own sake and can still meet in the middle on a
+    # folder with only one answer in it.
+    out, offered = [], set()
+    for w in sorted(ends[:1] + picks + ends[1:]):
+        key = (w[4], w[3], w[1])
+        if key not in offered:
+            offered.add(key)
+            out.append(w)
+    return out
 
 
 def show_outcomes(found, n_files, at):
-    """The list to pick from: what each setting would actually do."""
-    # The count is sized to this run, so a small folder does not read as a row
-    # of gaps and a large one still lines up.
-    w = max(len(f"{n:,}") for _, n, _, _ in found)
-    for i, (lim, n, freed, judged) in enumerate(found, 1):
+    """The list to pick from, described as what it offers rather than takes.
+
+    A setting decides how widely to group, not how much to cull: the person
+    chooses which frames survive each group, so nothing here is settled. The
+    numbers say how much there is to look at and the most that could go, which
+    is what a choice between settings is actually between.
+    """
+    # Widths are sized to this run, so a small folder does not read as a row of
+    # gaps and a large one still lines up.
+    gw = max(len(f"{g:,}") for _, _, _, _, g in found)
+    sw = max(len(f"{p:,}") for _, _, _, p, _ in found)
+    cw = max(len(f"{n:,}") for _, n, _, _, _ in found)
+    for i, (lim, n, freed, shown, groups) in enumerate(found, 1):
         mark = "   \u2190 reviewing" if at is not None and i == at else ""
-        # No count of what there is to review: every cull is shown, so it would
-        # only repeat the number two columns to the left.
-        print(f"    {i}   cull {n:>{w},} of {n_files:,}"
-              f"   {n / n_files * 100:5.1f}% of the folder"
+        word = "group " if groups == 1 else "groups"
+        print(f"    {i}   {groups:>{gw},} {word}"
+              f"   {shown:>{sw},} photographs"
+              f"   up to {n:>{cw},} can go"
               f"   {size_text(freed):>7}{mark}")
 
 
@@ -1231,7 +1275,7 @@ def undo(job, hint=True):
     if occupied:
         print(f"  {occupied:,} skipped \u2014 something is already there")
     if hint:
-        print("  the plan stands; --apply would redo the cull")
+        print("  the plan stands; --apply would move them again")
     refresh_dashboard()
 
 
@@ -1469,19 +1513,19 @@ def main():
                       if r["verdict"] == "REDUNDANT")
     if not total_pairs and not (interactive and session):
         if interactive:
-            wait_to_close("nothing redundant found")
+            wait_to_close("no copies, nothing to group")
         return
 
     if interactive and session is None:
         # No options list is coming, so this is the only account of the run.
-        wait_to_close(f"cull {total_pairs:,} \u00b7 {apply_hint}")
+        wait_to_close(f"{total_pairs:,} could go \u00b7 {apply_hint}")
     elif interactive:
         if not copies_first(folder, opts, session, job, a):
             return
         session = analyse(folder, opts) or session
         found = outcomes(session, opts["manifest"])
         if not found:
-            print(f"  nothing to cull at any setting \u00b7 {apply_hint}")
+            print("  nothing left to group \u00b7 every copy has been settled")
             return
         at = None                             # nothing rendered until chosen
 

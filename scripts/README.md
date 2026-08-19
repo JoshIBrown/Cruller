@@ -31,9 +31,13 @@ writes it for you.
    `verify.compare`, which aligns the two frames and measures what is left.
 5. Survivors are grouped around a keeper chosen by the ranking ladder, and the
    result is written as a plan: one row per file, with its verdict and why.
-6. `cull.py` offers the outcomes the dial can produce; `review.py` shows the
-   one chosen as a page of groups and returns which photographs survive each.
-7. `cull.py` rewrites the plan to match those answers and — only if asked —
+6. `cull.py` settles the copies first: everything the rules can name as the
+   same picture in another file, counted with its reasons, applied or looked
+   through or skipped as one decision.
+7. What survives is analysed again, and `cull.py` offers the outcomes the dial
+   can produce; `review.py` shows the one chosen as a page of groups and
+   returns which photographs survive each.
+8. `cull.py` rewrites the plan to match those answers and — only if asked —
    moves files and writes a log.
 
 ## Invariants
@@ -60,11 +64,15 @@ every stage to agree, and one dissent is enough to keep both photographs.
 kept, both frames. A crash during comparison is not a verdict: it is counted
 and reported, never cached.
 
-**Every cull is shown, and a label claiming derivation must prove it.** Reasons
-resting on file properties — a raw beside a JPEG, fewer pixels, a coarser
-quantization table — must also show the two pictures agree, or the pair is
-labelled a plain near-duplicate. The label never decides whether a person sees
-the pair; it only records what kind of relationship was found.
+**Every cull is offered for review, and a label claiming derivation must prove
+it.** Reasons resting on file properties — a raw beside a JPEG, fewer pixels, a
+coarser quantization table — must also show the two pictures agree, or the pair
+is labelled a plain near-duplicate.
+
+A run asks about copies and about groups separately, and the labels decide
+which question a pair belongs to rather than whether anybody sees it. Copies
+can be applied without being looked through, because that is a choice the
+person makes knowing how many there are and on what grounds.
 
 **The residual is measured both ways.** Warping softens the frame being moved,
 so the answer depends on which frame is named first. The larger difference

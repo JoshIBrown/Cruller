@@ -181,9 +181,17 @@ meant a bird in a landscape was silently judged by the loose limit, and the
 whole mechanism was invisible: nothing in the interface showed which limit a
 pair had been given. Curating the folder does the same job and can be seen.
 
-Rather than asking you to guess a number, a run offers five settings as a
-list: how many photographs each would cull, what share of the folder that is,
-and how much space it frees. Every one of them has something to look at.
+Rather than asking you to guess a number, a run offers the settings as a list,
+each described by what it offers rather than what it takes: how many groups it
+makes, how many photographs are in them, the most that could go, and the space
+that would free. Nothing in the list is settled — a setting decides how widely
+to group, and which frames survive a group is decided by a person — so a count
+of culls would describe an outcome nobody has agreed to.
+
+One row per distinct answer. Two settings holding the same groups are one
+choice written twice, whatever limits produced them, and a setting holding no
+groups is not a choice at all — which the lowest one usually is not, once the
+copies have been settled, because settling them is what it would have offered.
 
 **The list comes first and nothing is rendered until you choose.** The review
 is built only for the outcome you choose, and only that outcome can be applied

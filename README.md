@@ -80,10 +80,23 @@ them).
 
 ## Reviewing before you commit
 
-You are offered the settings the dial can actually produce — usually five — and
-pick a cull count rather than guessing at a threshold. Choosing one opens a page
-in your browser, **one section per group**: a group being the set the tool
-believes are the same photograph, of which some are to be moved.
+A run does two things, and they are asked separately.
+
+**First the copies.** Where the same picture sits in more than one file, there
+is nothing to judge, so those are counted, their reasons named, and offered as
+one decision: apply, look through them first, skip, or stop. Settling them also
+keeps the grouping honest — a folder holding three copies of everything groups
+strangely until they are gone.
+
+**Then the grouping.** You are offered the settings the dial can produce, each
+described by what it puts in front of you rather than what it would take:
+
+    1    10 groups    20 photographs   up to  10 can go     14 MB
+    2    44 groups    94 photographs   up to  50 can go    191 MB
+    3    89 groups   209 photographs   up to 120 can go    704 MB
+
+Nothing there is settled. Choosing one opens a page in your browser, **one
+section per group**, and which frames survive each group is yours to say.
 
 Each group shows **every photograph in it at once**, in the order they were
 taken, with the frame the tool would keep outlined. Click any photograph to
