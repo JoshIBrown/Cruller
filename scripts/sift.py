@@ -1212,22 +1212,9 @@ def main(argv=None):
         camera = 1 if r.get('maker') else 0
         return (motion, fmt_score, px, untouched, camera)
 
-    def rank_below(i):
-        """`once` and everything under it, for candidates `rank_above` tied.
-
-        Split here because reading the comb means decoding a file's scan, at
-        about 100ms, and almost every group is settled before this point. Asked
-        of every photograph in every group it doubled a folder's run for a rung
-        that changes one keeper in six hundred.
-        """
+    def rank_cheap(i):
+        """Every rung under `once` — all of them read from the record."""
         r = recs[i]
-        # Whether the file itself proves it was saved again. A JPEG stores
-        # whole numbers; saving it again with a finer table can only land on
-        # some of the new ones, which leaves a comb of empty bins in the
-        # histogram that one quantization cannot produce. It catches exactly
-        # the re-save that beats its own source on the rungs below: a coarser
-        # one already loses there.
-        once = 0 if _saved_again(r['path']) else 1
         upright = 1 if r.get('upright') else 0
         # How coarsely this was quantized, unbucketed. The tier rounds onto a
         # log scale, which is right for "much more compressed" and wrong here:
@@ -1240,11 +1227,40 @@ def main(argv=None):
         # definition — and without a final tiebreak the leader of their group
         # was decided by whichever the scan happened to list first, which made
         # the plan depend on directory order rather than on the photographs.
-        return (once, upright, finer, r.get('meta', 0), -r['tier'],
+        return (upright, finer, r.get('meta', 0), -r['tier'],
                 r['sharp'], r['bytes'], r['path'])
 
-    def rank(i):
-        return rank_above(i) + rank_below(i)
+    def keeper_of(g):
+        """The frame that survives, reading the comb as little as possible.
+
+        Reading it means decoding a file's scan, at about 200ms. Splitting the
+        order at that rung was not enough: frames from one camera tie on every
+        rung above it, so the tie is the normal case and every member was being
+        read.
+
+        What saves the work is that the rung can only ever *demote*. Among the
+        candidates left, order them on the rungs below the comb — all cheap —
+        and walk down: the first one that does not prove a second save is the
+        keeper, because it beats everything under it and nothing above
+        separates them. Usually that is the first file asked. If every
+        candidate proves a second save the rung separates nobody, and the
+        cheap order stands.
+
+        Returns the keeper and the candidates it read and found wanting, so
+        the reason printed for a cull can say the comb decided without any
+        file being read a second time.
+        """
+        top = max(rank_above(i) for i in g)
+        tied = [i for i in g if rank_above(i) == top]
+        if len(tied) == 1:
+            return tied[0], set()
+        order = sorted(tied, key=rank_cheap, reverse=True)
+        resaved = set()
+        for i in order:
+            if not _saved_again(recs[i]['path']):
+                return i, resaved
+            resaved.add(i)
+        return order[0], resaved
 
     def matches(keeper, other):
         """Is `other` redundant against `keeper`? The only membership test.
@@ -1429,7 +1445,15 @@ def main(argv=None):
         del scored[:]
         assigned = [False] * n
         groups = []
-        for done, i in enumerate(sorted(range(n), key=rank, reverse=True), 1):
+        # Strongest first, so a group forms around its keeper rather than
+        # around whichever frame the scan reached first. Ordered on the rungs
+        # that come from the record: this decides what to compare, not what to
+        # keep, and reading a comb here would cost a scan for every photograph
+        # in the folder to settle an order the keeper rule revisits anyway.
+        def sweep_order(i):
+            return rank_above(i) + rank_cheap(i)
+
+        for done, i in enumerate(sorted(range(n), key=sweep_order, reverse=True), 1):
             progress(done, n, "comparing photos")
             if assigned[i]:
                 continue
@@ -1527,9 +1551,7 @@ def main(argv=None):
         seen = 0
         progress(0, todo, "confirming culls")
         for gi, g in enumerate(ordered):
-            top = max(rank_above(i) for i in g)
-            tied = [i for i in g if rank_above(i) == top]
-            best = tied[0] if len(tied) == 1 else max(tied, key=rank_below)
+            best, resaved = keeper_of(g)
             kr = recs[best]
             for i in g:
                 r = recs[i]
@@ -1552,9 +1574,15 @@ def main(argv=None):
                     freed += r['bytes']
                     m, b, rr = margin_against(best, i)
                     sh, zm = geometry_of(best, i)
+                    # Built from what choosing the keeper already learned,
+                    # so naming the reason never reads a file's scan.
                     ka, la = rank_above(best), rank_above(i)
-                    kept_because = (why_inferior(ka, la) if ka != la else
-                                    why_inferior(rank(best), rank(i)))
+                    if ka != la:
+                        kept_because = why_inferior(ka, la)
+                    else:
+                        kept_because = why_inferior(
+                            ka + (0 if best in resaved else 1,) + rank_cheap(best),
+                            la + (0 if i in resaved else 1,) + rank_cheap(i))
                     rows.append([os.path.relpath(r['path'], folder), "REDUNDANT", gi, len(g), why,
                                  dims, r['tier'], round(r['sharp'], 1),
                                  f"{r['bytes']/1e6:.1f}", round(r['t'], 3),

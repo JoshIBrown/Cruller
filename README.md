@@ -79,10 +79,11 @@ step, which can only land on some of the new integers, so the histogram grows a
 comb of empty bins that a single pass cannot produce. Reading it means decoding
 the file's entropy-coded data rather than its pixels, because the round trip
 through pixels leaves the numbers a median of 0.2 off the nearest integer and
-the comb with them. That costs about 100ms, so it is read only when every rung
-above it has tied — almost every group is settled before then, and asking it of
-every photograph doubled a folder's run for a rung that moves one keeper in six
-hundred.
+the comb with them. That costs about 200ms a file, so it is read
+as little as possible: the rung can only ever demote, so the candidates left
+are put in order on the cheap rungs below it and read down until one does not
+prove a second save. That is usually the first file asked. On a folder of 140
+it is read nine times rather than 140.
 
 It catches one half of the problem, and it is the half that matters: a re-save
 at *coarser* quality already loses on the compression rungs, while a finer one

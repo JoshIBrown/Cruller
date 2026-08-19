@@ -154,9 +154,11 @@ DCT histogram — needed the coefficients as stored, which meant a baseline JPEG
 reader that decodes the entropy-coded data rather than the pixels; reading them
 through decoded pixels cannot work, and why is in dead-ends.md. A second, finer
 save leaves a comb of empty bins that one quantization cannot produce, and only
-a clean comb is acted on. It is read lazily, when every rung above it has tied,
-because decoding a scan costs about 100ms and almost every group is settled
-before that point.
+a clean comb is acted on. It is read as little as possible: frames from
+one camera tie on every rung above it, so the tie is the normal case, but the
+rung can only ever demote — so the candidates are ordered on the cheap rungs
+below and read down until one comes up clean. On a folder of 140 photographs
+that is nine reads rather than 140.
 
 **What it does not catch.** Saving again more *coarsely* collapses values
 together rather than leaving gaps, and looks like a photograph with less detail
