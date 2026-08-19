@@ -145,12 +145,31 @@ which photographs get culled, to save 3–6% of a run.
 The keeper is chosen by a ladder, and the first rung that separates two files
 decides:
 
-1. **Format** — a raw beats a derived file.
-2. **Resolution** — more pixels.
-3. **Metadata richness** — the file that still knows when and how it was taken.
-4. **Compression tier** — less lossy.
-5. **Sharpness**.
-6. **File size**.
+1. **Motion** — a frame carrying a Live Photo's video, since the video travels
+   with it when it is culled and no other rung can replace what that loses.
+2. **Format** — a raw beats a derived file.
+3. **Resolution** — more pixels.
+4. **Nothing wrote it after the camera did** — an editor named in the Software
+   tag, or a file clock moved away from the moment of capture.
+5. **The camera's own marks** — the private block a camera writes and an editor
+   does not regenerate.
+6. **Finer quantization** — the matrix read straight from the header.
+7. **Metadata richness** — the file that still knows when and how it was taken.
+8. **Compression tier** — less lossy.
+9. **Sharpness**.
+10. **File size**.
+11. **Path** — a coin toss, present only so the order is total and the plan
+    does not depend on the order the folder was scanned in.
+
+Rungs 4 and 5 are the only ones that are evidence rather than inference:
+everything else is a property of one file, while those two say something
+happened to it after the shutter. They sit above the compression rungs because
+a re-save at higher quality beats its own source on those — measured on real
+culls, where the tool kept a Windows Photo Viewer re-save over its iPhone
+original.
+
+The rung that decides is also the phrase the tool prints, taken from the same
+list, so the two cannot disagree.
 
 Sharpness settles about 69% of them, so it is worth stating exactly what it
 measures. The image is divided into a grid; in each tile the variance of a

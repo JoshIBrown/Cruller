@@ -84,7 +84,11 @@ with labels recording how the copy was made. A label may claim derivation only
 if it proves it: a containment warp, a quarter turn, an untouched geometry with
 the tone moved. Labels resting on file properties must also show the two
 pictures agree. The keeper comes from a ladder that puts raw first and
-resolution second.
+resolution second, and below those two rungs that are evidence rather than
+inference: whether anything wrote the file after the camera did, and whether
+the camera's own private block is still in it. Measured on 31 auto-culls across
+three folders, those two speak for a quarter of them and are silent for the
+rest; before they existed the direction was backwards on 6%.
 
 **In the literature:** this is *image phylogeny*, and it is a developed field.
 The standard shape is two steps: build a dissimilarity matrix with a
@@ -101,6 +105,16 @@ afterwards rather than measured.
 
 That inference is where the trouble is. Ranking by resolution assumes a copy is
 never larger than its source, which is false for an upscaled export.
+
+**What has proof today, and what does not.** Of the labels the tool acts on
+alone, most carry their own: an exact copy and an identical picture need no
+direction at all, a crop and a smaller copy are proved by containment, and a
+raw is not made from a JPEG. Two do not. A **resave** and a **tonal edit**
+leave the geometry untouched, so nothing about the pictures says which came
+first, and the direction rests on the compression rungs alone unless the camera
+marks happen to speak. On the three folders measured that was 10 of 31
+auto-culls. This is the gap double-compression detection closes, and it is why
+that item ranks above the other two.
 
 ## Detecting an upscale
 
@@ -121,8 +135,12 @@ assumption about which way resolution runs.
 
 ## Detecting a re-save
 
-**Here:** a compression tier is inferred and a difference of more than one tier
-is called a resave.
+**Here:** two readings of the same table, for two different jobs. The keeper
+order reads the quantization matrix straight, as a mean, because two generations
+of one picture often land in the same bucket; that names the earlier generation
+in 91% of pairs where the EXIF says which is the edit, and 96% once resolution
+has spoken first. The *label* still works off the bucketed tier, and calls a
+difference of more than one tier a resave.
 
 **In the literature:** a re-saved JPEG has been compressed twice, and double
 compression is detectable from the file itself. The quantization table is

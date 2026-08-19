@@ -210,7 +210,7 @@ EDITORS = ("photoshop", "lightroom", "gimp", "photo gallery", "picasa",
            "snapseed", "pixelmator", "affinity", "luminar", "capture one",
            "acdsee", "corel", "on1", "photos ", "photoscape", "paint.net")
 
-PROBE_VERSION = 5      # the quantization matrix is read, not just bucketed
+PROBE_VERSION = 6      # the camera's own marks are read
 
 
 # Verdicts are pure functions of two files' bytes as well, so the full-look
@@ -248,6 +248,7 @@ def _cache_open():
 # Only content-derived fields live in the cache. `path`, `bytes`, `md5` and
 # the capture-time fallback are per-file facts filled in at run time.
 _CACHED_SCALARS = ('sharp', 'w', 'h', 'tier', 'qmean', 'raw', 'meta', 'edited',
+                   'maker', 'moved',
                    'focal', 'exposure', 'exif_t')
 
 
@@ -357,7 +358,7 @@ def _probe(path, md5=None):
         # A re-encode usually loses the capture metadata. When two files hold the
         # same picture at the same size, the one that still knows when it was
         # taken is the earlier generation.
-        meta, edited = 0, False
+        meta, edited, maker, moved = 0, False, False, False
         try:
             if is_raw(path):
                 meta = 2
@@ -375,6 +376,20 @@ def _probe(path, md5=None):
                 # between two frames of one group.
                 edited = any(e in str(ex.get(t) or "").lower()
                              for t in (305, 11) for e in EDITORS)
+                # Two marks the camera leaves and an editor does not, both free
+                # here. The Software tag above only catches an editor that
+                # names itself, which is 4% of these files — the rest say the
+                # phone's OS version, which an edit made on the phone does not
+                # change. These two do not depend on recognising a name.
+                sub = ex.get_ifd(0x8769)
+                # The camera's private block. Editors do not regenerate it:
+                # absent on 100% of files an editor signed, present on 90% of
+                # the rest.
+                maker = bool(sub.get(37500))
+                # A camera leaves the file's clock at the moment of capture.
+                # Moved on 100% of files an editor signed, on 3% of the rest.
+                shot_at, written_at = sub.get(36867), ex.get(306)
+                moved = bool(shot_at and written_at and shot_at != written_at)
         except Exception:
             pass
         # Keypoints for the geometric screen, taken here because the frame is
@@ -395,6 +410,7 @@ def _probe(path, md5=None):
                     spts=spts, sdes=sdes, sshape=(int(SCREEN_W * g.shape[0] / g.shape[1]), SCREEN_W),
                     tier=quantization_tier(path), raw=is_raw(path), meta=meta,
                     qmean=quantization_mean(path), edited=edited,
+                    maker=maker, moved=moved,
                     exif_t=ex_t, md5=md5, bytes=os.path.getsize(path),
                     focal=shot['focal35'], exposure=shot['exposure'])
     except Exception as e:
@@ -749,28 +765,38 @@ def classify(keeper, other, v=None, dt=None):
     return "near-duplicate"
 
 
-# Said about the file being culled, because that is the question the review
-# has to answer: what is wrong with the one on the right. Same order as the
-# keeper rule, so these cannot drift apart from it.
-INFERIOR_REASONS = ("not the raw", "fewer pixels", "less metadata",
-                    "more compressed", "less sharp", "smaller file")
+# The keeper order, one rung per line: what is read, and what is wrong with the
+# file that loses on it. Both come from here so they cannot disagree. They did
+# disagree — rungs were added over time and the phrases were not, so every
+# reason the tool printed named the rung above the one that actually decided,
+# and a compression difference was reported as "less sharp". A rung added
+# without its phrase is now a syntax error rather than a silent mislabel.
+LADDER = (
+    ("motion",   "no Live Photo video"),
+    ("raw",      "not the raw"),
+    ("pixels",   "fewer pixels"),
+    ("unedited", "something wrote it after the camera did"),
+    ("camera",   "the camera's own marks are gone"),
+    ("finer",    "more compressed"),
+    ("metadata", "less metadata"),
+    ("tier",     "much more compressed"),
+    ("sharp",    "less sharp"),
+    ("bytes",    "smaller file"),
+    ("path",     None),          # the coin toss; never a reason
+)
 
 
 def why_inferior(keeper_rank, loser_rank):
     """What is wrong with the file being culled, in one phrase.
 
     A percentage of an allowance nobody set says nothing. This names the first
-    place the two files differ on the keeper order, from the loser's side, and
-    it cannot drift from the real rule because it reads the same tuple the rule
-    ranked on.
+    rung the two files differ on, from the loser's side, reading the same tuple
+    the keeper rule ranked on.
     """
-    for i, (k, l) in enumerate(zip(keeper_rank, loser_rank)):
+    assert len(keeper_rank) == len(LADDER), "a rung was added without its phrase"
+    for (name, phrase), k, l in zip(LADDER, keeper_rank, loser_rank):
         if k != l:
-            if i == 0:
-                return "not the raw"
-            if i >= len(INFERIOR_REASONS):
-                break        # the path tiebreak: a coin toss, not a reason
-            return INFERIOR_REASONS[i]
+            return phrase or "the same by every measure"
     return "the same by every measure"
 
 
@@ -1140,25 +1166,36 @@ def main(argv=None):
         px = r['w'] * r['h']
         if r['raw'] and px == 0:
             px = 10 ** 9                      # unknown sensor size still beats any export
-        # The path is the last resort, and it is there so the order is *total*.
-        # Two files can tie on every real criterion — copies do, by definition —
-        # and without a final tiebreak the leader of their group was decided by
-        # whichever the scan happened to list first. That made the plan depend
-        # on directory order, which is not a property of the photographs.
-        # Nothing has signed this one. Below resolution deliberately: a small
-        # edit must never beat a full-size original, and where the two are the
-        # same size this is what tells them apart — a red-eye fix and its
-        # source differ in no other way the ladder can see, and the fix was
-        # winning on file size.
-        untouched = 0 if r.get('edited') else 1
+        # The two rungs that are evidence rather than inference. Every other
+        # rung is a property of one file — how big, how sharp, how finely
+        # quantized — and says nothing about which of two files came first.
+        # These say something happened to a file after the shutter: an editor
+        # named itself, or the clock moved off the moment of capture, or the
+        # camera's private block is missing. All three are read from EXIF that
+        # is already open.
+        #
+        # Below resolution, so a small edit can never beat a full-size
+        # original. Above the compression rungs, because a re-save at higher
+        # quality beats its own source there — it spends more bytes on pixels
+        # it has already degraded. That is not hypothetical: on real culls the
+        # tool kept a Windows Photo Viewer re-save over its iPhone original,
+        # and kept a file whose clock had moved forty days over the one still
+        # carrying the camera's block.
+        untouched = 0 if (r.get('edited') or r.get('moved')) else 1
+        camera = 1 if r.get('maker') else 0
         # How coarsely this was quantized, unbucketed. The tier rounds onto a
         # log scale, which is right for "much more compressed" and wrong here:
         # two generations of one picture often land in the same bucket. Read
         # straight it names the earlier generation in 91% of pairs where the
         # EXIF says which is the edit, and 96% once resolution has spoken first.
         finer = -r.get('qmean', 0.0)
-        return (motion, fmt_score, px, untouched, finer, r.get('meta', 0),
-                -r['tier'], r['sharp'], r['bytes'], r['path'])
+        # The path is the last resort, and it is there so the order is
+        # *total*. Two files can tie on every real criterion — copies do, by
+        # definition — and without a final tiebreak the leader of their group
+        # was decided by whichever the scan happened to list first, which made
+        # the plan depend on directory order rather than on the photographs.
+        return (motion, fmt_score, px, untouched, camera, finer,
+                r.get('meta', 0), -r['tier'], r['sharp'], r['bytes'], r['path'])
 
     def matches(keeper, other):
         """Is `other` redundant against `keeper`? The only membership test.

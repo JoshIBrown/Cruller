@@ -52,18 +52,31 @@ in time** (bursts chained at under 3 seconds). Measured against exhaustive
 all-pairs comparison, this misses nothing.
 
 Which frame survives is decided by a ladder: carries a Live Photo's video →
-raw → resolution → untouched by an editor → finer quantization → metadata
-richness → compression tier → sharpness → file size.
+raw → resolution → nothing wrote it after the camera did → the camera's own
+marks → finer quantization → metadata richness → compression tier → sharpness
+→ file size.
 
-Three of those rungs exist to keep originals, because a copy is only obvious
-when it is smaller.
+Four of those rungs exist to keep originals, because a copy is only obvious
+when it is smaller. Two of the four are evidence rather than inference: they
+say something happened to a file after the shutter, where every rung below
+them only says how big or how sharp it is.
 
-**Untouched** reads the Software tag: an editor signs its work and a camera
-does not, so where two frames are the same size and one has been through an
-editor, the other is the earlier generation. It sits below resolution so a
-small edit can never beat a full frame, and it decides what nothing else can
-see — a red-eye fix, a colour conversion, a tonal change alter no dimension at
-all.
+**Nothing wrote it after the camera did** reads two things. An editor signs the
+Software tag, which is decisive but rare — 83% of an ordinary library carries a
+Software tag and only 4% names an editor, the rest being the phone's OS
+version, which an edit made on the phone leaves alone. So it also reads the
+file's own clock: a camera leaves it at the moment of capture and an editor
+moves it, which was true of every file an editor had signed and of 3% of the
+rest. It sits below resolution so a small edit can never beat a full frame, and
+it decides what nothing else can see — a red-eye fix, a colour conversion, a
+tonal change alter no dimension at all.
+
+**The camera's own marks** is the private block a camera writes and no editor
+regenerates: absent from every file an editor had signed, present on 90% of the
+rest. Where one of two frames still has it, that frame is the earlier
+generation. Both rungs sit above the compression ones because a re-save at
+higher quality beats its own source there — it spends more bytes on pixels it
+has already degraded, and on real culls that was enough to keep the copy.
 
 **Finer quantization** reads the JPEG's quantization matrix from its header,
 without decoding. Saving a JPEG again throws more away, so the finer matrix is
