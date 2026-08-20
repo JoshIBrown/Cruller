@@ -86,9 +86,10 @@ the tone moved. Labels resting on file properties must also show the two
 pictures agree. The keeper comes from a ladder that puts raw first and
 resolution second, and below those two rungs that are evidence rather than
 inference: whether anything wrote the file after the camera did, and whether
-the camera's own private block is still in it. Measured on 31 auto-culls across
-three folders, those two speak for a quarter of them and are silent for the
-rest; before they existed the direction was backwards on 6%.
+the camera's own private block is still in it. Both were built after a measured
+failure — the tool keeping a Windows Photo Viewer re-save over its iPhone
+original, and keeping a file whose clock had moved forty days over one still
+carrying the camera's block.
 
 **In the literature:** this is *image phylogeny*, and it is a developed field.
 The standard shape is two steps: build a dissimilarity matrix with a
@@ -112,9 +113,8 @@ direction at all, a crop and a smaller copy are proved by containment, and a
 raw is not made from a JPEG. Two do not. A **resave** and a **tonal edit**
 leave the geometry untouched, so nothing about the pictures says which came
 first, and the direction rests on the compression rungs alone unless the camera
-marks happen to speak. On the three folders measured that was 10 of 31
-auto-culls. This is the gap double-compression detection closes, and it is why
-that item ranks above the other two.
+marks happen to speak. This is the gap double-compression detection closes, and
+it is why that item ranks above the other two.
 
 ## A camera that saves two frames of one capture
 
@@ -180,8 +180,8 @@ that is nine reads rather than 140.
 together rather than leaving gaps, and looks like a photograph with less detail
 in it. That is the right half to miss: a coarser re-save already loses to its
 source on the compression rungs, while a finer one beats them. On 30 real
-auto-culls the comb spoke on 3, agreed with the camera marks every time it and
-they both spoke, and proved one direction the marks could not.
+auto-culls the comb spoke rarely, agreed with the camera marks every time it
+and they both spoke, and proved one direction the marks could not.
 
 ## Choosing the best frame of a burst
 
@@ -205,8 +205,8 @@ answered by inference:
 1. An asymmetric dissimilarity, so derivation has a direction that was measured
    rather than assumed from which file holds more pixels. **Still open.**
 2. Resampling detection, so an upscale cannot pass for an original. **Open, and
-   the least urgent** — measured against real culls, keepers read 0.98 of the
-   culled file's detail reach where an enlargement would read 0.41.
+   the least urgent** — spot-checked against real culls, the keepers read as
+   full-resolution frames rather than enlargements.
 3. The quantization table, so a re-save is read from the file rather than
    guessed from an inferred compression tier. **Done.**
 

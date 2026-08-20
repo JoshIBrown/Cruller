@@ -253,10 +253,10 @@ chroma differently at its own edges than the full frame did.
 
 **Why it fails.** Every one of those controls was re-saved by the same encoder
 that then tried to reproduce it. Real re-saves are not: they were made by
-Apple, by Windows Photo Viewer, by Adobe, each rounding differently. Against 9
-real re-save pairs the answer was "neither reproduces the other" **9 times out
-of 9**. The test proves same-encoder re-saves, which are not the ones in a
-photo library.
+Apple, by Windows Photo Viewer, by Adobe, each rounding differently. Asked
+about the re-save pairs in this library, it answered "neither reproduces the
+other" **every time** — it proves same-encoder re-saves, which are not the ones
+in a photo library.
 
 ## Reading double compression through decoded pixels
 
