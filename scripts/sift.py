@@ -217,6 +217,9 @@ def scan(folder, recursive, exclude=()):
 # blurry background". HDR: 10 of 10, keep the merge, though 9 of those said the
 # two could not be told apart. Hence two rungs pointing opposite ways.
 CUSTOM_RENDERED = 41985
+# Both frames the camera writes for one capture carry the same capture time, to
+# the second. Anything further apart is a second press of the shutter.
+ONE_CAPTURE = 0.5
 HDR_MERGE, HDR_SPARE, BLUR, BLUR_SOURCE = 3, 4, 8, 9
 
 EDITORS = ("photoshop", "lightroom", "gimp", "photo gallery", "picasa",
@@ -764,15 +767,20 @@ def classify(keeper, other, v=None, dt=None):
     """
     if other['md5'] == keeper['md5']:
         return "exact copy"
-    # One press of the shutter, two files, and EXIF says which is which. This
-    # is not an argument about lineage — the camera recorded the relationship —
-    # so it belongs with the reasons the tool acts on alone rather than in a
-    # group somebody has to look at.
+    # One press of the shutter, two files, and EXIF says which is which. The
+    # camera recorded the relationship, so this is not an argument about
+    # lineage the way the reasons below are — but the marks alone do not make a
+    # pair. Two different captures minutes apart can carry a 3 and a 4, and one
+    # such cull went out under this reason before the check was here: an HDR
+    # merge at 18:12:05 culling an untouched frame from 18:12:07, two seconds
+    # and two presses of the shutter away. Both frames of one capture carry the
+    # same capture time, so that is what is required.
     pair = (keeper.get('rendered'), other.get('rendered'))
-    if pair == (HDR_MERGE, HDR_SPARE):
-        return "spare of an HDR pair"
-    if pair == (BLUR_SOURCE, BLUR):
-        return "depth-blur version"
+    if dt is not None and dt < ONE_CAPTURE:
+        if pair == (HDR_MERGE, HDR_SPARE):
+            return "spare of an HDR pair"
+        if pair == (BLUR_SOURCE, BLUR):
+            return "depth-blur version"
     if (not keeper['raw'] and not other['raw']
             and keeper['w'] == other['w'] and keeper['h'] == other['h']
             and np.array_equal(keeper['thumb'], other['thumb'])
