@@ -864,7 +864,16 @@ def classify(keeper, other, v=None, dt=None):
     # plain near-duplicate, though the keeper was already right.
     if (keeper['w'] and keeper['h']
             and keeper['w'] == other['h'] and keeper['h'] == other['w']
-            and keeper['w'] != keeper['h'] and pictures_agree(v)):
+            and keeper['w'] != keeper['h']
+            # One capture instant is the evidence here, and it is stronger than
+            # the residual for this shape. A baked turn can sit 180 degrees
+            # from its original — same photograph, same histogram, anti-
+            # correlated pixel for pixel — and the residual then reads 16%
+            # while the two are plainly one picture. Turning a camera through a
+            # right angle and shooting again inside the same recorded second is
+            # not a thing that happens, so transposed shapes at one instant are
+            # a stored-orientation difference, not two photographs.
+            and ((dt is not None and dt < ONE_CAPTURE) or pictures_agree(v))):
         return "rotated"
     if op and kp and op < kp * 0.9 and structure_agrees(keeper, other):
         return "smaller"

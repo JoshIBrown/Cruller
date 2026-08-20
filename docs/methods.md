@@ -155,8 +155,15 @@ near-duplicate, so all of them reached the review.
 
 What gives it away is the stored dimensions being transposes of each other,
 which is read alongside the same agreement test every other lineage claim uses.
-Ten of the nineteen now settle; the rest have residuals of 10.5% and worse
-against a limit of 10, so the tool declines to call them one picture.
+Eighteen of the nineteen now settle. The evidence is the shared capture instant
+rather than the residual, because for this shape the residual is misleading: a
+baked turn can sit 180 degrees from its original, which is the same photograph
+with the same histogram and an anti-correlated pixel at every position, and it
+reads 16%. Turning a camera through a right angle and shooting again inside one
+recorded second is not something that happens, so transposed shapes at one
+instant are a stored-orientation difference. One case in the library has the
+turn baked the wrong way round, and the tool keeps the camera's frame — the one
+that is the right way up.
 
 ## Detecting an upscale
 
