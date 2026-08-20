@@ -495,14 +495,21 @@ def copies_first(folder, opts, session, job, a):
     return True
 
 
-def record_review(job, groups, answers, action, setting):
+def record_review(job, groups, answers, action, setting, proposed=True):
     """Keep every judgement, whether or not anything moved.
 
-    One row per photograph: what the plan proposed, what the person said, and
+    One row per photograph: what the tool proposed, what the person said, and
     the group it belonged to. An opinion about a photograph is the one thing
     here that cannot be worked out again, so it is written down before the
-    decision it informed. Passes accumulate — looking at one setting and then
+    decision it informed. Passes accumulate — looking at one round and then
     another is two opinions about the same folder.
+
+    `proposed` says whether the tool put a plan up to be judged. Round one did,
+    and the two columns can be compared: a difference is the tool being told it
+    was wrong, which is the whole record of how far it can be trusted. Round
+    two proposes nothing, so `planned` stays empty rather than reading `cull`
+    for every photograph and turning each keeper into an override of a
+    proposal nobody made.
     """
     if not DEFAULT_RECORDS:
         return
@@ -520,7 +527,8 @@ def record_review(job, groups, answers, action, setting):
             answered = "keep" in said
             for photo in g["photos"]:
                 w.writerow([stamp, setting, action, g["id"], photo["file"],
-                            "keep" if photo["keep"] else "cull",
+                            ("keep" if photo["keep"] else "cull")
+                            if proposed else "",
                             ("keep" if photo["file"] in keep else "cull")
                             if answered else "",
                             photo["why"],
@@ -734,20 +742,36 @@ def _header_of(path):
         return None
 
 
-def _label(job, stamp, outcome):
+def _label(job, stamp, outcome, every=False):
     """Add this job's review to the ledger that spans every folder.
 
     A single review answers one folder. The ledger is what a threshold can be
     fitted against, so it needs them all, and it needs to know which were acted
     on: an undo takes the approval back rather than leaving the record claiming
     those culls were endorsed.
+
+    A pass is one round's worth of answers: when it was judged, and which
+    round asked. Both are needed. Two rounds applied inside the same second
+    share a timestamp, and keyed on that alone they merge into one pass —
+    round one's plan would then be scored against round two's preferences.
+
+    An apply folds in the pass that was just answered, which is the last one
+    written. An undo puts every photograph of the job back, so it retracts
+    every pass, not the latest: retracting round two alone would leave round
+    one's rows claiming culls were endorsed while those files sit restored.
+
+    The ledger also needs to know which round asked. Round one's rows are the only
+    evidence of how often the tool is wrong, because only there did it propose
+    something a person could contradict. Round two's rows are preferences about
+    photographs nobody claimed were copies. Counted together, every keeper in a
+    scene reads as a cull the tool got wrong.
     """
     reviewed = os.path.join(DEFAULT_RECORDS, f"{job} - review.csv")
     if not os.path.exists(reviewed):
         return
     labels = os.path.join(DEFAULT_RECORDS, "labels.csv")
-    header = ["date", "job", "group", "file", "planned", "you_said", "why",
-              "difference", "reason", "outcome"]
+    header = ["date", "job", "round", "group", "file", "planned", "you_said",
+              "why", "difference", "reason", "outcome"]
     fresh = not os.path.exists(labels)
     if not fresh and _header_of(labels) != header:
         # The ledger is a record of somebody's opinions, and appending rows
@@ -772,17 +796,22 @@ def _label(job, stamp, outcome):
             # A review written before the ledger changed shape has different
             # columns. Its judgements are real and are kept as they are; only
             # the ones this ledger can read are folded in.
-            rows = [r for r in rows if header[2] in r and header[3] in r]
-            # Only the pass that was acted on. Looking at one setting and then
+            rows = [r for r in rows if "group" in r and "file" in r]
+            # Only the pass that was acted on. Looking at one round and then
             # another appends both, and marking the abandoned one "applied"
-            # would put culls in the ledger that never happened.
-            last = max((r["judged_at"] for r in rows), default=None)
+            # would put culls in the ledger that never happened. Rows are
+            # appended in the order they were judged, so the last row names
+            # the pass just answered.
+            def _pass(r):
+                return (r["judged_at"], r.get("setting", ""))
+
+            last = _pass(rows[-1]) if rows else None
             for r in rows:
-                if r["judged_at"] != last:
+                if not every and _pass(r) != last:
                     continue
-                w.writerow([stamp, job, r["group"], r["file"], r["planned"],
-                            r["you_said"], r["why"], r["difference"],
-                            r["reason"], outcome])
+                w.writerow([stamp, job, r.get("setting", ""), r["group"],
+                            r["file"], r["planned"], r["you_said"], r["why"],
+                            r["difference"], r["reason"], outcome])
     except OSError:
         pass
 
@@ -950,7 +979,7 @@ def undo(job, hint=True):
     # be able to make a finished undo look like a crash.
     try:
         _label(job, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-               "retracted by undo")
+               "retracted by undo", every=True)
     except Exception as e:
         print(f"  \u26a0 the label ledger was not updated: {str(e)[:60]}")
     refresh_dashboard()
@@ -1206,7 +1235,8 @@ def main():
             "the rest of that scene moves out \u00b7 a scene you skip is left "
             "whole",
             proposed=False)
-        record_review(job, groups, answers, action or "closed", "scenes")
+        record_review(job, groups, answers, action or "closed", "scenes",
+                      proposed=False)
 
         going, opened = unkept(groups, answers)
         skipped = len(groups) - opened
