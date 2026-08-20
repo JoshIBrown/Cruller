@@ -429,7 +429,7 @@ def copies_first(folder, opts, session, job, a):
     Separating them also keeps the grouping honest: a folder holding three
     copies of every photograph groups strangely until they are gone.
     """
-    # Every copy, not only the ones that need no dial. A resave and a smaller
+    # Every copy, not only the ones proven outright. A resave and a smaller
     # copy are as much "the same picture in another file" as a byte copy is,
     # but their labels are only given once a pair is already a member — so
     # asking at the floor would find the provable derivations and miss those.

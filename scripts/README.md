@@ -9,7 +9,7 @@ measurements behind them, and what was tried and rejected — see
 
 | | |
 |---|---|
-| `cull.py` | The command: arguments, the settings list, applying, undoing, reset, the blind audit |
+| `cull.py` | The command: the two rounds, applying, undoing, reset |
 | `review.py` | The review page: one group at a time, scrubbed frame by frame; also the blind audit |
 | `sift.py` | The engine: reads a folder, finds candidates, groups them, ranks each group, writes the plan |
 | `verify.py` | One question answered well — are these two frames the same photograph? Alignment and the residual |
@@ -31,14 +31,14 @@ writes it for you.
    `verify.compare`, which aligns the two frames and measures what is left.
 5. Survivors are grouped around a keeper chosen by the ranking ladder, and the
    result is written as a plan: one row per file, with its verdict and why.
-6. `cull.py` settles the copies first: everything the rules can name as the
-   same picture in another file, counted with its reasons, applied or looked
-   through or skipped as one decision.
-7. What survives is analysed again, and `cull.py` offers the outcomes the dial
-   can produce; `review.py` shows the one chosen as a page of groups and
-   returns which photographs survive each.
-8. `cull.py` rewrites the plan to match those answers and — only if asked —
-   moves files and writes a log.
+6. ROUND ONE. `cull.py` settles the copies: everything the ten rules in
+   `derived/` can name, counted with its reasons, and applied, looked through
+   or skipped as one decision.
+7. ROUND TWO. What survives is read again and `scenes/` gathers it — a shoot
+   by capture time, a scene by the sketch — largest first. `review.py` shows
+   the same page as round one, with nothing chosen.
+8. `cull.py` builds what leaves from those answers alone and — only if asked —
+   moves files and writes a log. A scene nobody reviewed contributes nothing.
 
 ## Invariants
 

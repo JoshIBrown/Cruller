@@ -25,7 +25,7 @@ cases that did not need protecting.
 **What replaced it.** Nothing, deliberately. Every case it was meant to fix is
 reachable only at a loose setting — of fourteen disputed culls collected from
 one review, eleven appeared only above the default limit, and none survived
-below it. The low end of the dial is the answer, and it needs no model.
+below it. A tight limit is the answer, and it needs no model.
 
 **The lesson worth keeping.** Before deciding a judgement needs more
 intelligence, check whether the evidence survived being shrunk. The case that

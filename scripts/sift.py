@@ -536,7 +536,7 @@ class Comparer:
 # One limit, for every photograph. Two limits split by whether anything alive
 # was in frame once sat here. They are gone because
 # the person choosing what to drag in decides the standard better than a
-# detector can — a folder of one kind needs one number, and the dial moves it.
+# detector can — a folder of one kind needs one number, and curating it sets one.
 DUP_BLOCK, DUP_RATIO = 30.0, 20.5
 
 # The thumbnail may only ever say "definitely not". Pairs further apart than
@@ -1358,7 +1358,7 @@ def main(argv=None):
     # guarantee, and a measured win: the clean A/B on the burst-heaviest
     # folder culls 1,070 with this against 1,045 without, in fewer groups —
     # giant bursts stop fragmenting into several keepers once every mate is
-    # a candidate. It also means a looser dial or a smarter sketch can never
+    # a candidate. It also means a looser limit or a smarter sketch can never
     # be starved of pairs, and a burst is treated identically in a 900-file
     # run and a very large one.
     #
@@ -1528,7 +1528,7 @@ def main(argv=None):
             def used(value, allowed):
                 # A limit of zero allows nothing, so any difference at all has
                 # overrun it — and dividing by it would crash the outcomes
-                # scan, which always probes the bottom of the dial first.
+                # scan, which always probes the tightest limit first.
                 if allowed:
                     return value / allowed
                 return 0.0 if not value else float("inf")
