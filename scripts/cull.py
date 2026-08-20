@@ -2,21 +2,26 @@
 """
 cull.py - the whole job in one command.
 
-Analyse a folder, find files that are redundant against a better copy of the
-same picture, and move them out once somebody has looked at every one. No AI,
-no conversation. Nothing is ever deleted.
+Drop a folder on the app, or name it here. Nothing is ever deleted: what the
+tool removes is moved to a holding folder with a log, and one command puts it
+all back.
 
-    python3 cull.py "/path/to/folder"          # analyse, then review every cull
-    python3 cull.py "/path/to/folder" --apply  # skip the review, move them out
+    python3 cull.py "/path/to/folder"          # the two rounds, with review
+    python3 cull.py "/path/to/folder" --apply  # take the plan as it stands
 
-Two frames are the same photograph when, after one is warped onto the other,
-what is left over is small — measured at 1600px, where a changed expression or
-a turned head is still visible. One rule for every lens.
+**A run is two rounds, and they ask different questions.**
 
-A run offers the settings the dial can produce and opens the one you choose as
-a page, where each cull is accepted, refused or turned round on its own. The
-setting lives for that folder, is written into its records, and does not carry
-into the next run.
+ROUND ONE is about copies. Every photograph is read, and where one file came
+from another that is also here — the same bytes, the same pixels, a crop, a
+turn, an export, a frame the camera itself wrote twice — a rule names it. Ten
+rules, one per file, in `derived/`. These have one right answer, so the round
+says how many and why, and looking is optional.
+
+ROUND TWO is about choice. What survived is read again and gathered into
+scenes: one shoot's worth of one subject, in `scenes/`. Nothing here is
+provable, so the tool chooses nothing. It shows each scene, largest first, and
+a person keeps what they want. What they did not keep moves out with the
+copies, and a scene nobody reviewed is left whole.
 """
 import argparse, csv, datetime, hashlib, math, os, shutil, subprocess, sys
 import tempfile, time
@@ -254,6 +259,9 @@ def analyse(folder, opts):
 # name here that no rule produces would promise something nothing delivers.
 MECHANICAL = derived.SETTLED
 
+#: One line each, for the summary a person reads before deciding to look.
+REASONS = {rule.name: rule.says for rule in derived.ORDER}
+
 
 def groups_from(folder, manifest):
     """Every group the plan would cull from, in capture order, for the review.
@@ -443,11 +451,14 @@ def copies_first(folder, opts, session, job, a):
                 why[photo["why"]] += 1
     freed = sum(float(r["MB"] or 0) for r in csv.DictReader(open(opts["manifest"]))
                 if r["verdict"] == "REDUNDANT") * 1e6
-    print(f"\n  {n:,} cop{'y' if n == 1 else 'ies'} \u00b7 {size_text(freed)} "
-          f"\u00b7 the same picture in more than one file")
+    print(f"\n  ROUND ONE \u00b7 copies")
+    print(f"  {n:,} file{'' if n == 1 else 's'} here came from another file "
+          f"that is also here \u00b7 {size_text(freed)}")
+    width = max(len(k) for k in why) if why else 0
     for kind, count in sorted(why.items(), key=lambda x: -x[1]):
-        print(f"      {count:>4}  {kind}")
-    print("  [a]pply  \u00b7  [l]ook first  \u00b7  [s]kip  \u00b7  [q]uit")
+        print(f"      {count:>4}  {kind:<{width}}   {REASONS.get(kind, '')}")
+    print(f"\n  each one is provable, and named. nothing else is touched.")
+    print("  [r]eview them  \u00b7  [a]pply  \u00b7  [s]kip  \u00b7  [q]uit")
 
     while True:
         try:
@@ -455,14 +466,14 @@ def copies_first(folder, opts, session, job, a):
         except (EOFError, KeyboardInterrupt):
             print()
             return False
-        if key in ("a", "l", "s", "q"):
+        if key in ("r", "a", "s", "q"):
             print(f"  > {key}")
             break
     if key == "q":
         return False
     if key == "s":
         return True
-    if key == "l":
+    if key == "r":
         action, answers = review.ask_groups(
             groups, opts["reviewdir"], f"{job} \u2014 {n:,} copies",
             "the same picture in more than one file \u00b7 the reason each "
@@ -1015,16 +1026,15 @@ def main():
                     help="judge only the files named in LIST, one path per line "
                          "— how the app hands over a dropped selection")
     ap.add_argument("--block", type=float, default=None, metavar="N",
-                    help="judge at this difference limit (0-100) instead of "
-                         "offering the settings list \u2014 for a plan that "
-                         "reproduces without anyone answering anything")
+                    help="round one's difference limit (0-100); the default "
+                         "is what every measurement here was made at")
     ap.add_argument("--ratio", type=float, default=None, metavar="N",
                     help="the texture-relative limit that moves with --block; "
                          "set both or neither")
     ap.add_argument("--apply", action="store_true", help="move the redundant files out")
     ap.add_argument("--no-prompt", action="store_true", help="never ask; just report")
     ap.add_argument("--verbose", action="store_true",
-                    help="full diagnostics: thresholds, bands, verification stats")
+                    help="full diagnostics: thresholds and comparison counts")
     a = ap.parse_args()
 
     if a.reset:
@@ -1177,25 +1187,34 @@ def main():
         # The copies are gone; what is left is read again and gathered into
         # scenes, each one shoot's worth of one subject. The largest opens
         # first, because that is the thing there are most of.
+        print(f"\n  ROUND TWO \u00b7 scenes")
         groups = gather_scenes(folder, opts)
         if not groups:
-            print("  nothing left to gather \u00b7 every copy has been settled")
+            print("  nothing gathers into a scene \u00b7 nothing more to do")
             return
         n_photos = sum(len(g["photos"]) for g in groups)
+        biggest = len(groups[0]["photos"])
+        print(f"  {len(groups):,} scene{'' if len(groups) == 1 else 's'} \u00b7 "
+              f"{n_photos:,} photographs \u00b7 the biggest holds {biggest}")
+        print(f"  nothing is chosen for you here. keep what you want from each;")
+        print(f"  a scene you do not review is left alone.\n")
 
         action, answers = review.ask_groups(
             groups, opts["reviewdir"],
-            f"{job} — {len(groups)} scenes, {n_photos} photographs",
-            "the biggest scene first \u00b7 keep the ones you want \u00b7 "
-            "the rest of that scene moves out with the copies")
+            f"{job} \u2014 {len(groups):,} scenes, {n_photos:,} photographs",
+            "one scene at a time, biggest first \u00b7 keep what you want and "
+            "the rest of that scene moves out \u00b7 a scene you skip is left "
+            "whole",
+            proposed=False)
         record_review(job, groups, answers, action or "closed", "scenes")
 
         going, opened = unkept(groups, answers)
         skipped = len(groups) - opened
         if skipped:
-            print(f"  {skipped} scene(s) you did not open \u00b7 untouched")
+            print(f"  {skipped:,} scene{'' if skipped == 1 else 's'} unreviewed "
+                  f"\u00b7 left whole")
         if not going:
-            print("  nothing chosen \u00b7 nothing moved")
+            print("  nothing to move \u00b7 you kept everything you looked at")
             return
         if action != "apply":
             print("  nothing moved \u00b7 your answers are kept")

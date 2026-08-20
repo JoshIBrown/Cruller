@@ -392,7 +392,7 @@ function finish(action) {{
         ? 'Your answers are saved. You can close this page.'
         : (action === 'apply'
             ? 'Applying. You can close this page.'
-            : 'Nothing moved, your answers are kept. Back to the settings.');
+            : 'Nothing moved. What you said is written down either way.');
     }});
 }}
 </script>"""
@@ -473,9 +473,17 @@ PAGE = """<meta charset="utf-8"><meta name="viewport"
  .head { display:flex; gap:12px; align-items:center; margin-bottom:10px }
  .num { color:#6f6f78; font-variant-numeric:tabular-nums }
  .why { color:#c9c9d1 }
- .state { margin-left:auto; font-size:13px; color:#9a9aa2 }
+ .state { margin-left:auto; font-size:13px; color:#9a9aa2;
+          font-variant-numeric:tabular-nums }
+ /* A group nobody has looked at reads as unfinished business: the state is
+    dimmed and italic, and a mark runs down the left edge so the eye can find
+    what is still waiting while scrolling past forty of them. */
+ .group.unreviewed .state { color:#7b7b84; font-style:italic }
+ .group.unreviewed { border-left:3px solid #3a3a44; padding-left:17px }
+ .group:not(.unreviewed) { border-left:3px solid #2f6b4f; padding-left:17px }
  .all { background:#26262e; color:#c9c9d1; border:1px solid #37373f;
         border-radius:5px; padding:3px 9px; font-size:12px; cursor:pointer }
+ .all:hover { background:#31313b; border-color:#4a4a54 }
  .pane { display:grid; grid-template-columns:1fr 200px; gap:10px }
  /* One frame large: a thumbnail is enough to recognise a picture and not
     enough to agree to losing it. */
@@ -521,7 +529,7 @@ PAGE = """<meta charset="utf-8"><meta name="viewport"
 <header><h1>%(title)s</h1><div class="sub">%(subtitle)s</div></header>
 <main id="list">%(blocks)s</main>
 <footer>
-  <button class="go" onclick="finish('apply')">Apply</button>
+  <button class="go" onclick="finish('apply')">%(apply)s</button>
   <button class="plain" onclick="finish('quit')">Quit &mdash; move nothing</button>
   <span id="tally"></span>
 </footer>
@@ -544,7 +552,12 @@ function pick(gi, i) { AT[gi] = i; paint(gi); }
 // checkboxes: keeping some, keeping all, keeping none. The fourth is
 // unreviewed, which looks exactly like keeping none — nothing ticked — and
 // means the opposite. So it is held here and shown, never inferred.
+// Round one arrives with a plan, so its groups start read: leaving one alone
+// means its plan stands. Round two arrives with nothing chosen, so its groups
+// start unreviewed and leaving one alone means exactly nothing.
+const PROPOSED = %(proposed)s;
 const REVIEWED = {};
+if (PROPOSED) G.forEach((_, i) => REVIEWED[i] = true);
 function reviewed(gi) { REVIEWED[gi] = true; }
 function setkeep(gi, keep) { reviewed(gi); G[gi][AT[gi]].keep = keep; paint(gi); }
 function all(gi, keep) { reviewed(gi); G[gi].forEach(p => p.keep = keep); paint(gi); }
@@ -625,15 +638,15 @@ function finish(action) {
       const d = document.getElementById('done');
       d.style.display = 'block';
       d.textContent = action === 'apply'
-        ? 'Applying. You can close this page.'
-        : 'Nothing moved, your answers are kept. Back to the settings.';
+        ? 'Moving them now. You can close this page.'
+        : 'Nothing moved. What you said is written down either way.';
     });
 }
 G.forEach((_, i) => paint(i));
 </script>"""
 
 
-def _group_page(groups, thumbs, title, subtitle, where="img"):
+def _group_page(groups, thumbs, title, subtitle, where="img", proposed=True):
     """One section per group: a rail of every frame, and one shown large.
 
     The rail carries the whole group and its state at a glance — what stays,
@@ -682,14 +695,26 @@ def _group_page(groups, thumbs, title, subtitle, where="img"):
                          for p in g["photos"] if thumbs.get(p["path"])]
                         for g in groups])
     return PAGE % dict(title=html.escape(title), subtitle=html.escape(subtitle),
-                       blocks="".join(blocks), state=state)
+                       blocks="".join(blocks), state=state,
+                       proposed="true" if proposed else "false",
+                       apply="Apply" if proposed
+                             else "Move what I did not keep")
 
 
-def ask_groups(groups, out_dir, title, subtitle):
+def ask_groups(groups, out_dir, title, subtitle, proposed=True):
     """Show every group, take a verdict per photograph, return them.
 
     Returns `(action, answers)` with answers keyed by group index, each
-    `{"keep": [filename, ...], "reason": str}`.
+    `{"keep": [...], "reason": str, REVIEWED: bool}`.
+
+    `proposed` says whether the tool has already chosen. Round one has: it
+    culls what it can prove, so a group left alone means "your plan stands" and
+    every group starts as though it had been read. Round two has not chosen
+    anything, so a group left alone means nothing at all, and every group
+    starts unreviewed.
+
+    The same page either way, because it is the same act — looking at a set of
+    photographs and saying which to keep. Only the starting point differs.
     """
     if not groups:
         return None, {}
@@ -699,7 +724,7 @@ def ask_groups(groups, out_dir, title, subtitle):
     _sweep_old(out_dir, made_in)
     thumbs = _thumbs([{"keeper_path": p["path"], "culled_path": p["path"]}
                       for p in photos], os.path.join(out_dir, made_in))
-    page = _group_page(groups, thumbs, title, subtitle, made_in)
+    page = _group_page(groups, thumbs, title, subtitle, made_in, proposed)
     with open(os.path.join(out_dir, "index.html"), "w", encoding="utf-8") as fh:
         fh.write(page)
     action, answer = _serve(out_dir)
