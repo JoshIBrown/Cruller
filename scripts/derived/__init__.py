@@ -1,7 +1,7 @@
 """Round one: the photographs that were derived from another one here.
 
 Named for what every rule proves — this file came from that file — rather
-than for any one of them. `copy` is a rule inside it, not the whole idea.
+than for any one of them. `duplicate` is a rule inside it, not the whole idea.
 
 A photograph is removed here only when a rule can prove it is a copy of one
 that stays. The rules are asked in order and the first that holds gives the
@@ -18,7 +18,7 @@ that every name a rule can return is one the first round is allowed to act on,
 so a rule that belongs to neither round fails rather than quietly deleting
 photographs nobody agreed to.
 """
-from .copy import Copy
+from .duplicate import Duplicate
 from .crop import Crop
 from .fake_blur import FakeBlur
 from .non_hdr import NonHdr
@@ -33,7 +33,7 @@ from .rotated import Rotated
 
 #: Asked in this order; the first that holds wins.
 ORDER = (
-    Copy(),      # the same bytes
+    Duplicate(),     # the same bytes
     NonHdr(),      # the camera said so
     FakeBlur(),     # the camera said so
     Identical(),    # the same pixels, proven

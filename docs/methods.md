@@ -108,7 +108,7 @@ That inference is where the trouble is. Ranking by resolution assumes a copy is
 never larger than its source, which is false for an upscaled export.
 
 **What has proof today, and what does not.** Of the labels the tool acts on
-alone, most carry their own: a *copy* and an *identical* need no direction at
+alone, most carry their own: a *duplicate* and an *identical* need no direction at
 all, a *crop* and a *smaller* are proved by containment, and a raw is not made
 from a JPEG. Two do not. A **resave** and an **edited**
 leave the geometry untouched, so nothing about the pictures says which came

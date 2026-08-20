@@ -24,6 +24,7 @@ from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from loaders import open_image
+import derived
 import review
 import sift
 from sift import progress
@@ -671,15 +672,11 @@ def analyse(folder, opts):
     return sift.main(argv)
 
 
-# Culls settled by rule rather than by the dial: the keeper is larger, or raw,
-# or less compressed, or the file is byte-identical, or the pair is one capture
-# twice. They are still reviewed like everything else, but the dial cannot
-# change them, so they are left out when working out which settings are worth
-# offering — a setting that only differs in how it labels these is not a
-# different answer.
-MECHANICAL = {"copy", "identical", "smaller", "resave",
-              "export", "crop", "rotated", "edited",
-              "non-hdr", "fake-blur"}
+# What round one may settle on its own, asked of the rules rather than listed
+# here. A second list is a second thing to forget: adding a rule and leaving it
+# out of the set would quietly send its culls to the review, or worse, adding a
+# name here that no rule produces would promise something nothing delivers.
+MECHANICAL = derived.SETTLED
 
 
 def groups_from(folder, manifest):
