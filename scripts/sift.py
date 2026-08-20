@@ -210,6 +210,13 @@ def scan(folder, recursive, exclude=()):
 # computed and the frame it computed from. The pairing is unambiguous: measured
 # over 25,728 photographs, an HDR capture writes 3 beside 4 and a Portrait
 # capture writes 8 beside 9, and no other combination occurs.
+#
+# Which of the two to keep is taste rather than measurement — both are the same
+# photograph and neither is degraded — so it was asked, and the answer differs
+# by kind. Portrait: 20 of 20, keep the untouched frame, "the left has the fake
+# blurry background". HDR: 10 of 10, keep the merge, though 9 of those said the
+# two could not be told apart. Hence two rungs pointing opposite ways.
+CUSTOM_RENDERED = 41985
 HDR_MERGE, HDR_SPARE, BLUR, BLUR_SOURCE = 3, 4, 8, 9
 
 EDITORS = ("photoshop", "lightroom", "gimp", "photo gallery", "picasa",
@@ -407,23 +414,10 @@ def _probe(path, md5=None):
                 # Moved on 100% of files an editor signed, on 3% of the rest.
                 shot_at, written_at = sub.get(36867), ex.get(306)
                 moved = bool(shot_at and written_at and shot_at != written_at)
-                # A phone shooting Portrait writes two files for one press of
-                # the shutter and marks them here: 8 on the frame it computed a
-                # depth blur into, 9 on the frame it computed it from. Josh
-                # judged 20 of these and wanted the untouched frame every time
-                # — "the left has the fake blurry background". The blur is an
-                # effect, not a photograph, and it is the only one of these
-                # marks he had a view about: on 10 HDR pairs, 9 of his answers
-                # were that he could not tell them apart.
-                rendered = sub.get(41985)
-                # The other half of the same mark. Shooting HDR also writes two
-                # files, 3 on the merged exposure and 4 on the untouched frame,
-                # and there Josh wants the merge: on 10 pairs, 9 answers were
-                # that he could not tell them apart and the tenth preferred the
-                # merge — "background not blown out". So the untouched frame is
-                # the redundant one, which is the opposite of the Portrait case
-                # and the reason these are two rungs rather than one.
-
+                # Which of the two frames this is, when the camera saved
+                # both. Kept as the mark itself rather than as a flag, because
+                # naming the relationship means comparing the pair's values.
+                rendered = sub.get(CUSTOM_RENDERED)
         except Exception:
             pass
         # Keypoints for the geometric screen, taken here because the frame is
