@@ -83,6 +83,11 @@ always at the same size, so that rung only has to outrank file size. Judged
 across 30 pairs: the untouched frame every time for Portrait, the merge every
 time for HDR.
 
+Because the camera recorded the relationship rather than the tool inferring it,
+these are settled without anybody looking, under their own reasons — *spare of
+an HDR pair* and *depth-blur version*. On two folders that moved 23 groups out
+of the review and into the first phase.
+
 **Saved again** is the only rung the photograph proves about itself, without
 reference to metadata anyone could have copied across. A JPEG stores each block
 as whole numbers; saving it again with a finer table divides those by a smaller

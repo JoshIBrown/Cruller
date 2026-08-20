@@ -206,11 +206,17 @@ def scan(folder, recursive, exclude=()):
 # A camera writes its own model there, and a file nothing has touched carries
 # no such name — so between two frames of one group, the one without is the
 # earlier generation. Names only, never versions, so a new release still reads.
+# EXIF CustomRendered, for the two cases where a camera saves both the frame it
+# computed and the frame it computed from. The pairing is unambiguous: measured
+# over 25,728 photographs, an HDR capture writes 3 beside 4 and a Portrait
+# capture writes 8 beside 9, and no other combination occurs.
+HDR_MERGE, HDR_SPARE, BLUR, BLUR_SOURCE = 3, 4, 8, 9
+
 EDITORS = ("photoshop", "lightroom", "gimp", "photo gallery", "picasa",
            "snapseed", "pixelmator", "affinity", "luminar", "capture one",
            "acdsee", "corel", "on1", "photos ", "photoscape", "paint.net")
 
-PROBE_VERSION = 8      # what the camera computed, and what it computed from
+PROBE_VERSION = 9      # what the camera computed, and what it computed from
 
 
 # Verdicts are pure functions of two files' bytes as well, so the full-look
@@ -248,7 +254,7 @@ def _cache_open():
 # Only content-derived fields live in the cache. `path`, `bytes`, `md5` and
 # the capture-time fallback are per-file facts filled in at run time.
 _CACHED_SCALARS = ('sharp', 'w', 'h', 'tier', 'qmean', 'raw', 'meta', 'edited',
-                   'maker', 'moved', 'upright', 'faked', 'spare_of_hdr',
+                   'maker', 'moved', 'upright', 'rendered',
                    'focal', 'exposure', 'exif_t')
 
 
@@ -359,7 +365,7 @@ def _probe(path, md5=None):
         # same picture at the same size, the one that still knows when it was
         # taken is the earlier generation.
         meta, edited, maker, moved, upright = 0, False, False, False, False
-        faked = spare_of_hdr = False
+        rendered = None
         try:
             if is_raw(path):
                 meta = 2
@@ -409,8 +415,7 @@ def _probe(path, md5=None):
                 # effect, not a photograph, and it is the only one of these
                 # marks he had a view about: on 10 HDR pairs, 9 of his answers
                 # were that he could not tell them apart.
-                rendered_as = sub.get(41985)
-                faked = rendered_as == 8
+                rendered = sub.get(41985)
                 # The other half of the same mark. Shooting HDR also writes two
                 # files, 3 on the merged exposure and 4 on the untouched frame,
                 # and there Josh wants the merge: on 10 pairs, 9 answers were
@@ -418,7 +423,7 @@ def _probe(path, md5=None):
                 # merge — "background not blown out". So the untouched frame is
                 # the redundant one, which is the opposite of the Portrait case
                 # and the reason these are two rungs rather than one.
-                spare_of_hdr = rendered_as == 4
+
         except Exception:
             pass
         # Keypoints for the geometric screen, taken here because the frame is
@@ -439,8 +444,8 @@ def _probe(path, md5=None):
                     spts=spts, sdes=sdes, sshape=(int(SCREEN_W * g.shape[0] / g.shape[1]), SCREEN_W),
                     tier=quantization_tier(path), raw=is_raw(path), meta=meta,
                     qmean=quantization_mean(path), edited=edited,
-                    maker=maker, moved=moved, upright=upright, faked=faked,
-                    spare_of_hdr=spare_of_hdr,
+                    maker=maker, moved=moved, upright=upright,
+                    rendered=rendered,
                     exif_t=ex_t, md5=md5, bytes=os.path.getsize(path),
                     focal=shot['focal35'], exposure=shot['exposure'])
     except Exception as e:
@@ -765,6 +770,15 @@ def classify(keeper, other, v=None, dt=None):
     """
     if other['md5'] == keeper['md5']:
         return "exact copy"
+    # One press of the shutter, two files, and EXIF says which is which. This
+    # is not an argument about lineage — the camera recorded the relationship —
+    # so it belongs with the reasons the tool acts on alone rather than in a
+    # group somebody has to look at.
+    pair = (keeper.get('rendered'), other.get('rendered'))
+    if pair == (HDR_MERGE, HDR_SPARE):
+        return "spare of an HDR pair"
+    if pair == (BLUR_SOURCE, BLUR):
+        return "depth-blur version"
     if (not keeper['raw'] and not other['raw']
             and keeper['w'] == other['w'] and keeper['h'] == other['h']
             and np.array_equal(keeper['thumb'], other['thumb'])
@@ -1219,7 +1233,7 @@ def main(argv=None):
         # refused. Only the blur is demoted — the untouched frame ranks as any
         # ordinary photograph does, so this changes nothing outside a pair the
         # camera made together.
-        real = 0 if r.get('faked') else 1
+        real = 0 if r.get('rendered') == BLUR else 1
         px = r['w'] * r['h']
         if r['raw'] and px == 0:
             px = 10 ** 9                      # unknown sensor size still beats any export
@@ -1245,7 +1259,7 @@ def main(argv=None):
         # always the same size — 168 of 168 measured here — so this only ever
         # decides once resolution has tied, and it can never cull a larger
         # frame in favour of a smaller one somewhere else.
-        merged = 0 if r.get('spare_of_hdr') else 1
+        merged = 0 if r.get('rendered') == HDR_SPARE else 1
         return (motion, fmt_score, real, px, untouched, camera, merged)
 
     def rank_cheap(i):

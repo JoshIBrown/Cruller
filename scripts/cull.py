@@ -678,7 +678,8 @@ def analyse(folder, opts):
 # offering — a setting that only differs in how it labels these is not a
 # different answer.
 MECHANICAL = {"exact copy", "identical picture", "smaller copy", "resave",
-              "export of raw", "cropped copy", "rotated copy", "tonal edit"}
+              "export of raw", "cropped copy", "rotated copy", "tonal edit",
+              "spare of an HDR pair", "depth-blur version"}
 
 
 def groups_from(folder, manifest):

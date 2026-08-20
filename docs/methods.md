@@ -116,6 +116,22 @@ marks happen to speak. On the three folders measured that was 10 of 31
 auto-culls. This is the gap double-compression detection closes, and it is why
 that item ranks above the other two.
 
+## A camera that saves two frames of one capture
+
+**Here:** read from EXIF `CustomRendered`, which the camera writes itself.
+Shooting HDR stores 3 on the merged exposure and 4 on the frame it was merged
+from; shooting Portrait stores 8 on the depth blur and 9 on the frame it was
+computed from. Measured over 25,728 photographs, no other combination occurs.
+Which one survives is not something a measurement can answer — both are the
+same photograph and neither is degraded — so it was asked: across 30 pairs, the
+untouched frame every time for Portrait, the merged exposure every time for
+HDR, though 9 of 10 HDR answers were that the two could not be told apart.
+
+**Why it is not inference.** Every other reason the tool acts on alone is an
+argument that one file was made from another. This one is a record the camera
+kept at the moment of capture, which is why these are settled without review
+even though the two frames differ visibly.
+
 ## Detecting an upscale
 
 **Here:** nothing. Resolution decides, so given an original and an enlarged
