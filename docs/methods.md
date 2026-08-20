@@ -46,7 +46,7 @@ published homography benchmarks and removes the inlier-threshold guess.
 **Where they diverge.** The block residual is close to a per-block mean
 absolute error. The standard comparison is SSIM, which decomposes similarity
 into luminance, contrast and structure. That decomposition is interesting here
-for a specific reason: a *tonal edit* is precisely a change in luminance and
+for a specific reason: an *edited* pair is precisely a change in luminance and
 contrast with structure held constant, and the code currently detects it with
 hand-set thresholds on brightness offset and contrast ratio. SSIM already
 separates those terms by construction.
@@ -108,9 +108,9 @@ That inference is where the trouble is. Ranking by resolution assumes a copy is
 never larger than its source, which is false for an upscaled export.
 
 **What has proof today, and what does not.** Of the labels the tool acts on
-alone, most carry their own: an exact copy and an identical picture need no
-direction at all, a crop and a smaller copy are proved by containment, and a
-raw is not made from a JPEG. Two do not. A **resave** and a **tonal edit**
+alone, most carry their own: a *copy* and an *identical* need no direction at
+all, a *crop* and a *smaller* are proved by containment, and a raw is not made
+from a JPEG. Two do not. A **resave** and an **edited**
 leave the geometry untouched, so nothing about the pictures says which came
 first, and the direction rests on the compression rungs alone unless the camera
 marks happen to speak. This is the gap double-compression detection closes, and

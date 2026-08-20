@@ -226,7 +226,7 @@ def compare(ga, gb, ka=None, da=None, kb=None, db=None):
     # Derivative evidence, for classification rather than membership: the
     # rotation the warp absorbed, whether either frame's view lands entirely
     # inside the other (a crop), and how far the light moved at identical
-    # geometry (a tonal edit). All read from work already done.
+    # geometry (an edit that moved only the tone). All read from work already done.
     rot = float(np.degrees(np.arctan2(H[1, 0], H[0, 0])))
     hb_, wb_ = gb.shape
     tol_a, tol_b = 0.02 * max(w_, h_), 0.02 * max(wb_, hb_)

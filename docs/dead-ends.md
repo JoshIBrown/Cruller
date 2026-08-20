@@ -189,13 +189,14 @@ reached, none actually culled.
 
 ## Brightness-matching the residual
 
-**The idea.** A tonal edit differs from its original only in brightness, so
+**The idea.** An edit that moves only the tone differs from its original in
+brightness alone, so
 matching brightness before measuring would let the comparison see past the
 edit.
 
 **Why it went.** A global offset match gained tonal pairs and lost partial-light
 pairs, ending slightly behind. A linear gain-and-offset match still missed most
-tonal edits, because tone-curve edits are locally nonlinear, and it pushed a
+such edits, because tone curves are locally nonlinear, and it pushed a
 must-keep pair — a breaking wave — towards being culled. Provable lineage
 solved the problem instead, without touching the measurement.
 

@@ -10,14 +10,21 @@ group, decides which single file is worth keeping.
     python3 sift.py "/path/to/folder"                 # report + manifest, no changes
     python3 sift.py "/path/to/folder" --recursive
 
-Every duplicate is labelled with WHY it is a duplicate:
+Every duplicate is labelled with what is wrong with the file being removed —
+each name says why *that* file is the one to go, not how the pair is related:
 
-    exact copy        byte-identical, under another name
-    identical picture same pixels, different file bytes — proven by full decode
-    resave            same picture, more heavily compressed
-    smaller copy      same picture at lower resolution
-    export of raw     a JPEG whose raw original is also in this folder
-    near-duplicate    a different frame of the same moment
+    copy        byte-identical to the one being kept, under another name
+    identical   the same pixels in a different file, proven by a full decode
+    non-hdr     the frame the camera merged its HDR exposure from
+    fake-blur   the depth blur the camera computed, not the frame it shot
+    export      a JPEG whose raw original is also in this folder
+    crop        a crop of the frame being kept
+    rotated     a quarter turn of it, with the orientation flag reset
+    edited      the same geometry with the tone moved
+    smaller     the same picture at lower resolution
+    resave      the same picture, more heavily compressed
+    near-duplicate  a different frame of the same moment — this one is not
+                    settled here; it goes to the review
 
 Keeping order, best first: raw or lossless beats JPEG; larger beats smaller;
 less compressed beats more compressed; sharper beats softer.
@@ -697,7 +704,7 @@ CONFIRM_SIZE = 3200
 
 
 def derivative_kind(v, dt):
-    """Crop, rotation or tonal edit of the same capture — provable lineage.
+    """Crop, quarter turn or tone change within one capture — provable lineage.
 
     Where lineage is provable it is MEMBERSHIP, not just a label: the edit
     itself can push the residual past any limit, and an edit of the original is
@@ -720,9 +727,9 @@ def derivative_kind(v, dt):
     z = v.get("zoom") or 1.0
     if agrees and ((v.get("b_in_a") == 1.0 and z <= 0.91) or
                    (v.get("a_in_b") == 1.0 and z >= 1.10)):
-        return "cropped copy"
+        return "crop"
     if agrees and v.get("rot") is not None and abs(abs(v["rot"]) - 90) < 3:
-        return "rotated copy"
+        return "rotated"
     # A true edit inherits its source's capture instant exactly, so this asks
     # for the identical timestamp as well as unmoved geometry. That is not
     # sufficient on its own: many cameras record only whole seconds, so frames
@@ -734,7 +741,7 @@ def derivative_kind(v, dt):
             and abs(v.get("rot") or 0.0) < 1.0
             and (abs(v.get("lum_off") or 0.0) > 6
                  or abs((v.get("contrast") or 1.0) - 1.0) > 0.08)):
-        return "tonal edit"
+        return "edited"
     return None
 
 
@@ -784,7 +791,7 @@ def classify(keeper, other, v=None, dt=None):
     the labels.
     """
     if other['md5'] == keeper['md5']:
-        return "exact copy"
+        return "copy"
     # One press of the shutter, two files, and EXIF says which is which. The
     # camera recorded the relationship, so this is not an argument about
     # lineage the way the reasons below are — but the marks alone do not make a
@@ -796,14 +803,14 @@ def classify(keeper, other, v=None, dt=None):
     pair = (keeper.get('rendered'), other.get('rendered'))
     if dt is not None and dt < ONE_CAPTURE:
         if pair == (HDR_MERGE, HDR_SPARE):
-            return "spare of an HDR pair"
+            return "non-hdr"
         if pair == (BLUR_SOURCE, BLUR):
-            return "depth-blur version"
+            return "fake-blur"
     if (not keeper['raw'] and not other['raw']
             and keeper['w'] == other['w'] and keeper['h'] == other['h']
             and np.array_equal(keeper['thumb'], other['thumb'])
             and same_picture(keeper['path'], other['path'])):
-        return "identical picture"           # same pixels, different file bytes
+        return "identical"           # same pixels, different file bytes
     kp = keeper['w'] * keeper['h']; op = other['w'] * other['h']
     # Everything below asserts one thing: `other` was made from `keeper`, and
     # `keeper` is still here. The names say how, which is for the record; the
@@ -817,12 +824,12 @@ def classify(keeper, other, v=None, dt=None):
     # must show the pictures agree before they may claim lineage; without that
     # they fall through to a plain near-duplicate.
     if keeper['raw'] and not other['raw'] and structure_agrees(keeper, other):
-        return "export of raw"
+        return "export"
     kind = derivative_kind(v, dt)
     if kind:
         return kind
     if op and kp and op < kp * 0.9 and structure_agrees(keeper, other):
-        return "smaller copy"
+        return "smaller"
     if (other['tier'] > keeper['tier'] + 1
             and structure_agrees(keeper, other)):
         return "resave"

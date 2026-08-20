@@ -262,10 +262,10 @@ reach it immediately; only a change to the drop-handling inside
       reading photos    [############--------------------]  38%  1,900/5,000   1m20s left
       comparing photos  [################################] 100%  145/145      2m04s
       21 copies · 118 MB · the same picture in more than one file
-             8  cropped copy
+             8  crop
              7  resave
-             5  smaller copy
-             1  rotated copy
+             5  smaller
+             1  rotated
       [a]pply  ·  [l]ook first  ·  [s]kip  ·  [q]uit
       > a
       21 copies moved · 118 MB

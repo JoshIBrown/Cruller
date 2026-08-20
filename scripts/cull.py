@@ -677,9 +677,9 @@ def analyse(folder, opts):
 # change them, so they are left out when working out which settings are worth
 # offering — a setting that only differs in how it labels these is not a
 # different answer.
-MECHANICAL = {"exact copy", "identical picture", "smaller copy", "resave",
-              "export of raw", "cropped copy", "rotated copy", "tonal edit",
-              "spare of an HDR pair", "depth-blur version"}
+MECHANICAL = {"copy", "identical", "smaller", "resave",
+              "export", "crop", "rotated", "edited",
+              "non-hdr", "fake-blur"}
 
 
 def groups_from(folder, manifest):
@@ -784,7 +784,7 @@ def copies_first(folder, opts, session, job, a):
     copies of every photograph groups strangely until they are gone.
     """
     # Every copy, not only the ones that need no dial. A resave and a smaller
-    # copy are as much "the same picture in another file" as an exact copy is,
+    # copy are as much "the same picture in another file" as a byte copy is,
     # but their labels are only given once a pair is already a member — so
     # asking at the floor would find the provable derivations and miss those.
     # Judged at the default and then filtered to what the rules can name.

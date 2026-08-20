@@ -85,7 +85,7 @@ time for HDR.
 
 Because the camera recorded the relationship rather than the tool inferring it,
 these are settled without anybody looking, under their own reasons — *spare of
-an HDR pair* and *depth-blur version* — rather than going to the review as
+*non-hdr* and *fake-blur* — rather than going to the review as
 near-duplicates.
 
 **Saved again** is the only rung the photograph proves about itself, without

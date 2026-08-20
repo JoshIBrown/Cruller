@@ -334,7 +334,7 @@ These are one rule wearing several labels. Each says the same thing — this
 file is not the original, and the original is here — and the label records how
 the copy was made, which is a note rather than a separate decision.
 
-The provable relationship *is* the answer: a crop or a tonal edit is grouped
+The provable relationship *is* the answer: a crop or a tone change is grouped
 regardless of how large its measured difference is, because the edit is exactly
 what makes the difference large, and the edit is what should go.
 
