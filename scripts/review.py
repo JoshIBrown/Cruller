@@ -30,6 +30,13 @@ from sift import progress
 THUMB_LONG = 1100          # generous: the point is to see whether it is a duplicate
 
 
+#: The key the group page sets when a person has actually decided about a
+#: group. Named here rather than spelled out at both ends, because the two ends
+#: drifted once already: the page said one word and the caller read another,
+#: and nothing failed — round two simply moved nothing, quietly.
+REVIEWED = "reviewed"
+
+
 def _srgb(im):
     """Convert to sRGB, because that is what the page will be read as.
 
@@ -529,9 +536,19 @@ const KEPT = {"not the raw":"this is the raw", "fewer pixels":"more pixels",
   "an edit":"untouched by an editor"};
 // Choosing what to look at and deciding its fate are separate acts.
 function pick(gi, i) { AT[gi] = i; paint(gi); }
-function setkeep(gi, keep) { G[gi][AT[gi]].keep = keep; paint(gi); }
-function all(gi, keep) { G[gi].forEach(p => p.keep = keep); paint(gi); }
-function note(gi) { NOTE[gi] = document.getElementById('r' + gi).value; }
+// Whether this group was decided about at all. An empty set of keepers is an
+// answer — "none of these" — and saying nothing is not, so the two cannot be
+// sent as the same thing. Without this a scene scrolled past arrives looking
+// exactly like a scene somebody emptied on purpose.
+// A group is in one of four states, and only three can be read off the
+// checkboxes: keeping some, keeping all, keeping none. The fourth is
+// unreviewed, which looks exactly like keeping none — nothing ticked — and
+// means the opposite. So it is held here and shown, never inferred.
+const REVIEWED = {};
+function reviewed(gi) { REVIEWED[gi] = true; }
+function setkeep(gi, keep) { reviewed(gi); G[gi][AT[gi]].keep = keep; paint(gi); }
+function all(gi, keep) { reviewed(gi); G[gi].forEach(p => p.keep = keep); paint(gi); }
+function note(gi) { reviewed(gi); NOTE[gi] = document.getElementById('r' + gi).value; }
 function why(g, p) {
   if (!p.keep) return p.why + (p.because ? ' \\u00b7 ' + p.because : '');
   const beaten = g.filter(x => !x.keep && x.because).map(x => x.because)[0];
@@ -546,7 +563,8 @@ function paint(gi) {
   box.classList.toggle('cull', !p.keep);
   document.getElementById('k' + gi).checked = p.keep;
   document.getElementById('g' + gi).textContent =
-    (p.keep ? 'keeping' : 'moving out') + (p.chosen ? " \\u00b7 the tool's pick" : '');
+    !REVIEWED[gi] ? 'unreviewed'
+    : (p.keep ? 'keeping' : 'moving out') + (p.chosen ? " \\u00b7 the tool's pick" : '');
   document.querySelectorAll('[data-g="' + gi + '"] .pip').forEach(el => {
     const n = +el.dataset.i;
     el.classList.toggle('keep', g[n].keep);
@@ -562,13 +580,20 @@ function paint(gi) {
     + (said ? ' \\u00b7 ' + said : '');
   const kept = g.filter(x => x.keep).length;
   document.getElementById('t' + gi).textContent =
-    kept === 0 ? 'all of them go' :
-    kept === g.length ? 'all of them stay' : kept + ' of ' + g.length + ' stay';
-  let moved = 0, groups = 0;
-  G.forEach(gg => { const m = gg.filter(x => !x.keep).length;
-                    moved += m; if (m) groups++; });
+    !REVIEWED[gi] ? 'unreviewed' :
+    kept === 0 ? 'keeping none' :
+    kept === g.length ? 'keeping all' : 'keeping ' + kept + ' of ' + g.length;
+  const sec2 = document.querySelector('[data-g="' + gi + '"]');
+  if (sec2) sec2.classList.toggle('unreviewed', !REVIEWED[gi]);
+  let moved = 0, groups = 0, waiting = 0;
+  G.forEach((gg, n) => {
+    if (!REVIEWED[n]) { waiting++; return; }     // unreviewed moves nothing
+    const m = gg.filter(x => !x.keep).length;
+    moved += m; if (m) groups++;
+  });
   document.getElementById('tally').textContent =
-    moved + ' to move, from ' + groups + ' group' + (groups === 1 ? '' : 's');
+    moved + ' to move, from ' + groups + ' group' + (groups === 1 ? '' : 's')
+    + (waiting ? ' \\u00b7 ' + waiting + ' unreviewed' : '');
 }
 // Arrows walk the group under the pointer; space keeps or drops what is shown.
 document.addEventListener('keydown', e => {
@@ -589,6 +614,7 @@ function finish(action) {
   document.querySelectorAll('.group').forEach(sec => {
     const i = +sec.dataset.g;
     answers[i] = {keep: G[i].filter(p => p.keep).map(p => p.file),
+                  reviewed: !!REVIEWED[i],
                   reason: (NOTE[i] || '').trim()};
   });
   fetch('/done', {method:'POST', headers:{'Content-Type':'application/json'},

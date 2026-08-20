@@ -1475,8 +1475,14 @@ def main(argv=None):
             if len(members) > 1:
                 groups.append(members)
         dup = sum(len(g) - 1 for g in groups)
+        # Every comparison ends in exactly one of these. The books balancing is
+        # the point: a run that quietly lost thirteen of them would report a
+        # cull count with no hint that anything was missing. When a new way of
+        # settling a pair is added, it belongs on this list — the camera-pair
+        # rule was added and not listed, and the warning is what said so.
         accounted = (stats_v.get("rejected on the sketch", 0)
                      + stats_v.get("screened out on keypoints", 0)
+                     + stats_v.get("one capture, both frames kept by the camera", 0)
                      + stats_v.get("same", 0) + stats_v.get("different", 0)
                      + stats_v.get("unknown", 0))
         if stats_v.get("comparisons attempted", 0) != accounted:
