@@ -771,6 +771,21 @@ def structure_agrees(a, b, floor=0.97):
     return float(va @ vb) / (na * nb) >= floor
 
 
+def camera_pair(a, b):
+    """Did one press of the shutter write both of these?
+
+    True only for the two combinations a camera actually writes — an HDR merge
+    beside the frame it merged from, a depth blur beside the frame it was
+    computed from — and only when both carry the same capture time. Either
+    order, because this is asked before anything decides which one survives.
+    """
+    ra, rb = a.get('rendered'), b.get('rendered')
+    if {ra, rb} not in ({HDR_MERGE, HDR_SPARE}, {BLUR, BLUR_SOURCE}):
+        return False
+    ta, tb = a.get('exif_t'), b.get('exif_t')
+    return bool(ta and tb and abs(ta - tb) < ONE_CAPTURE)
+
+
 def classify(keeper, other, v=None, dt=None):
     """Why is `other` redundant given `keeper`?
 
@@ -1360,6 +1375,20 @@ def main(argv=None):
         still visible.
         """
         stats_v["comparisons attempted"] += 1
+        # The camera's own record outranks the residual. Where it wrote both
+        # frames of one capture, they are one photograph by provenance even
+        # though they do not look alike — an HDR merge lifts shadows and pulls
+        # back highlights, so the residual reads it as a different scene and
+        # the pair never reached its rule. Measured across ten folders, only 27
+        # of 57 such pairs were being settled, and 29 of the misses were pairs
+        # the full look had rejected outright.
+        #
+        # Not a shortcut around the funnel: the mark is only trusted alongside
+        # a shared capture time, and only for the two combinations a camera
+        # writes. Anything else still has to look alike.
+        if camera_pair(recs[keeper], recs[other]):
+            stats_v["one capture, both frames kept by the camera"] += 1
+            return True
         b, r = cmp.compare(keeper, other)
         if b > REJECT_BLOCK / 100 or r > REJECT_RATIO:
             # Simultaneous captures get a second opinion: a copy that was

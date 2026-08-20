@@ -132,6 +132,16 @@ argument that one file was made from another. This one is a record the camera
 kept at the moment of capture, which is why these are settled without review
 even though the two frames differ visibly.
 
+**And why the record outranks the comparison.** They differ visibly enough that
+the full look calls them different scenes — an HDR merge lifts shadows and
+pulls back highlights, which is exactly what the residual measures. So the pair
+was being nominated, rejected, and never reaching its own rule: 27 of 57 such
+pairs settled. The mark is about provenance and the residual only about
+appearance, so where the camera says one capture, that is the membership
+decision. Narrowly: only the two combinations a camera writes, only with a
+shared capture time, and everything else still has to look alike. 56 of 57 now,
+the last being a pair whose group formed around a third frame.
+
 ## Detecting an upscale
 
 **Here:** nothing. Resolution decides, so given an original and an enlarged
