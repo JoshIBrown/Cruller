@@ -39,6 +39,10 @@ from PIL import Image
 from multiprocessing import Pool
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import derived
+from derived.evidence import (structure_agrees, same_picture,
+                             pictures_agree, ONE_CAPTURE, HDR_MERGE,
+                             HDR_SPARE, BLUR, BLUR_SOURCE)
 from loaders import (open_image, exif_time, time_fallback, quantization_tier,
                      quantization_mean,
                      pixel_dims, is_raw, shot_info, IMG_EXT, HAVE_HEIF)
@@ -226,8 +230,6 @@ def scan(folder, recursive, exclude=()):
 CUSTOM_RENDERED = 41985
 # Both frames the camera writes for one capture carry the same capture time, to
 # the second. Anything further apart is a second press of the shutter.
-ONE_CAPTURE = 0.5
-HDR_MERGE, HDR_SPARE, BLUR, BLUR_SOURCE = 3, 4, 8, 9
 
 EDITORS = ("photoshop", "lightroom", "gimp", "photo gallery", "picasa",
            "snapseed", "pixelmator", "affinity", "luminar", "capture one",
@@ -640,19 +642,6 @@ def neighbours(T, cap, chunk=512):
     return out
 
 
-def same_picture(pa, pb):
-    """Proof, not judgement: decode both files fully and compare every pixel.
-
-    Expensive, so callers gate it behind cheap evidence (equal thumbnails,
-    equal dimensions). Equality here is certainty — a pair that passes cannot
-    be a false positive, whatever the subject.
-    """
-    try:
-        a = np.asarray(open_image(pa).convert("RGB"))
-        b = np.asarray(open_image(pb).convert("RGB"))
-        return a.shape == b.shape and bool(np.array_equal(a, b))
-    except Exception:
-        return False
 
 
 # How much of a pair may still differ while one is called a copy of the other.
@@ -672,7 +661,6 @@ def same_picture(pa, pb):
 #
 # Against a real library the pair of tests admits 1 of the 50 pairs that
 # geometry alone had claimed, and every one of the 139 real derivatives.
-DERIVED_MAX, DERIVED_RATIO = 10.0, 5.0
 
 
 def has_motion(path, _seen={}):
@@ -703,84 +691,10 @@ def has_motion(path, _seen={}):
 CONFIRM_SIZE = 3200
 
 
-def pictures_agree(v):
-    """Do the two frames hold the same picture, by the alignment's own numbers?
-
-    The evidence every lineage claim rests on: either what is left after
-    warping one onto the other is small, or it is small against the texture
-    already there.
-    """
-    if not v:
-        return False
-    block, rel = v.get("block"), v.get("ratio")
-    return ((block is not None and block * 100 <= DERIVED_MAX)
-            or (rel is not None and rel <= DERIVED_RATIO))
 
 
-def derivative_kind(v, dt):
-    """Crop, quarter turn or tone change within one capture — provable lineage.
-
-    Where lineage is provable it is MEMBERSHIP, not just a label: the edit
-    itself can push the residual past any limit, and an edit of the original is
-    exactly what the keep-originals rule says must go.
-
-    That bypass is only honest if the lineage is real, so each kind must show
-    the two pictures agree as well as that their geometry lines up. Framing
-    alone proves nothing: a burst shot while zooming nests one frame inside the
-    other exactly as a crop does, and a subject who moved between the frames
-    then leaves by a rule no dial can reach.
-
-    Same-instant only, too: seconds apart, a crop signature is as often an
-    optical zoom (measured 50/50).
-    """
-    if v is None or dt is None or dt >= 2.0 or v.get("scene") != "same":
-        return None
-    agrees = pictures_agree(v)
-    z = v.get("zoom") or 1.0
-    if agrees and ((v.get("b_in_a") == 1.0 and z <= 0.91) or
-                   (v.get("a_in_b") == 1.0 and z >= 1.10)):
-        return "crop"
-    if agrees and v.get("rot") is not None and abs(abs(v["rot"]) - 90) < 3:
-        return "rotated"
-    # A true edit inherits its source's capture instant exactly, so this asks
-    # for the identical timestamp as well as unmoved geometry. That is not
-    # sufficient on its own: many cameras record only whole seconds, so frames
-    # of a burst share an instant to the millisecond too, and "same geometry,
-    # different light" then describes a changing face as readily as a
-    # brightness edit. The pictures still have to agree.
-    if (agrees and dt <= 0.01
-            and v.get("shift", 1.0) < 0.02 and abs(z - 1.0) < 0.03
-            and abs(v.get("rot") or 0.0) < 1.0
-            and (abs(v.get("lum_off") or 0.0) > 6
-                 or abs((v.get("contrast") or 1.0) - 1.0) > 0.08)):
-        return "edited"
-    return None
 
 
-def structure_agrees(a, b, floor=0.97):
-    """Do these two hold the same picture, tone set aside?
-
-    Brightness is the first thing an export changes and the last thing that
-    matters: resizing, re-encoding and tone-mapping all move it, while the
-    picture stays put. Removing each sketch's mean and scale before comparing
-    answers "the same picture?" without also asking "the same tone?", which is
-    the wrong question to ask of a copy.
-
-    Free at this point — both sketches are already in hand — and it is what
-    separates a real derivative from two photographs that merely differ in
-    resolution or compression. Audited across four folders, every cull that
-    skipped review on a bare file property and should not have was a pair this
-    test rejects.
-    """
-    ta = np.asarray(a['thumb'], dtype=np.float32)
-    tb = np.asarray(b['thumb'], dtype=np.float32)
-    if ta.shape != tb.shape:
-        return False
-    va, vb = ta.ravel() - ta.mean(), tb.ravel() - tb.mean()
-    na, nb = float(np.sqrt(va @ va)), float(np.sqrt(vb @ vb))
-    if na < 1e-3 or nb < 1e-3:                 # a blank frame agrees with anything
-        return False
-    return float(va @ vb) / (na * nb) >= floor
 
 
 def camera_pair(a, b):
@@ -798,89 +712,6 @@ def camera_pair(a, b):
     return bool(ta and tb and abs(ta - tb) < ONE_CAPTURE)
 
 
-def classify(keeper, other, v=None, dt=None):
-    """Why is `other` redundant given `keeper`?
-
-    There is really one reason, and these are its labels: the file is not the
-    original and the original is here. What differs is how the copy was made —
-    cropped, turned, re-toned, resized, re-encoded — and that is a note for the
-    record rather than a separate decision.
-
-    A reason may claim that relationship only if it proves it. `v` is the
-    alignment verdict the membership decision was made on and `dt` the
-    capture-time gap; between them they establish a crop, a quarter turn, or a
-    frame whose geometry is untouched and whose tone moved. Where a reason
-    rests on a file property instead, it must show the two pictures agree.
-
-    Evidence is geometric and photometric, never filenames. The time gap is
-    used only to insist a crop or a turn belongs to one capture: a crop
-    signature seconds apart is as often an optical zoom, measured at 50/50 on
-    the labels.
-    """
-    if other['md5'] == keeper['md5']:
-        return "copy"
-    # One press of the shutter, two files, and EXIF says which is which. The
-    # camera recorded the relationship, so this is not an argument about
-    # lineage the way the reasons below are — but the marks alone do not make a
-    # pair. Two different captures minutes apart can carry a 3 and a 4, and one
-    # such cull went out under this reason before the check was here: an HDR
-    # merge at 18:12:05 culling an untouched frame from 18:12:07, two seconds
-    # and two presses of the shutter away. Both frames of one capture carry the
-    # same capture time, so that is what is required.
-    pair = (keeper.get('rendered'), other.get('rendered'))
-    if dt is not None and dt < ONE_CAPTURE:
-        if pair == (HDR_MERGE, HDR_SPARE):
-            return "non-hdr"
-        if pair == (BLUR_SOURCE, BLUR):
-            return "fake-blur"
-    if (not keeper['raw'] and not other['raw']
-            and keeper['w'] == other['w'] and keeper['h'] == other['h']
-            and np.array_equal(keeper['thumb'], other['thumb'])
-            and same_picture(keeper['path'], other['path'])):
-        return "identical"           # same pixels, different file bytes
-    kp = keeper['w'] * keeper['h']; op = other['w'] * other['h']
-    # Everything below asserts one thing: `other` was made from `keeper`, and
-    # `keeper` is still here. The names say how, which is for the record; the
-    # decision is the same in every case; the names differ only in what
-    # evidence backs them.
-    #
-    # Three prove derivation on their own — a containment warp, a quarter turn,
-    # an identical frame with the tone moved. Three do not: being a raw beside
-    # a JPEG, holding fewer pixels, or carrying a coarser quantization table
-    # are facts about two files, not about a relationship between them. Those
-    # must show the pictures agree before they may claim lineage; without that
-    # they fall through to a plain near-duplicate.
-    if keeper['raw'] and not other['raw'] and structure_agrees(keeper, other):
-        return "export"
-    kind = derivative_kind(v, dt)
-    if kind:
-        return kind
-    # A quarter turn baked into the pixels. The alignment cannot report this
-    # one: orientation is applied before anything is measured, so a frame
-    # stored sideways and its upright twin line up with no rotation at all —
-    # the pair above reads rot=0 and a residual of 0.8%. What gives it away is
-    # the stored shape, one being the transpose of the other. Nineteen captures
-    # in this library are that shape and every one was reaching the review as a
-    # plain near-duplicate, though the keeper was already right.
-    if (keeper['w'] and keeper['h']
-            and keeper['w'] == other['h'] and keeper['h'] == other['w']
-            and keeper['w'] != keeper['h']
-            # One capture instant is the evidence here, and it is stronger than
-            # the residual for this shape. A baked turn can sit 180 degrees
-            # from its original — same photograph, same histogram, anti-
-            # correlated pixel for pixel — and the residual then reads 16%
-            # while the two are plainly one picture. Turning a camera through a
-            # right angle and shooting again inside the same recorded second is
-            # not a thing that happens, so transposed shapes at one instant are
-            # a stored-orientation difference, not two photographs.
-            and ((dt is not None and dt < ONE_CAPTURE) or pictures_agree(v))):
-        return "rotated"
-    if op and kp and op < kp * 0.9 and structure_agrees(keeper, other):
-        return "smaller"
-    if (other['tier'] > keeper['tier'] + 1
-            and structure_agrees(keeper, other)):
-        return "resave"
-    return "near-duplicate"
 
 
 # The keeper order, one rung per line: what is read, and what is wrong with the
@@ -921,6 +752,16 @@ def _saved_again(path):
     except Exception:
         return False
     return s is not None and s >= twice.PROVEN
+
+
+def classify(keeper, other, v=None, dt=None):
+    """Why is `other` redundant given `keeper`? Asked of the rules, in order.
+
+    The reasons live in the `copies` package, one file each, so a rule can be
+    read and argued with on its own. This is the seam between them and the rest
+    of the run.
+    """
+    return derived.reason(derived.Pair(keeper, other, v, dt))
 
 
 def why_inferior(keeper_rank, loser_rank):
@@ -1472,9 +1313,10 @@ def main(argv=None):
         if v["block"] is None:
             return False
         ok = (v["block"] <= cur['block'] / 100 and v["ratio"] <= cur['ratio'])
-        if not ok and derivative_kind(
-                v, abs(recs[keeper]['t'] - recs[other]['t'])):
-            ok = True    # provable lineage is membership: the edit goes
+        if not ok and derived.belong_together(derived.Pair(
+                recs[keeper], recs[other], v,
+                abs(recs[keeper]['t'] - recs[other]['t']))):
+            ok = True    # provable lineage is membership: the copy goes
         if ok and use_verify:
             # One more look, at a resolution that keeps the fine detail. Only
             # a positive "different" overturns: where the closer look cannot
