@@ -252,8 +252,17 @@ def _cache_open():
         db = sqlite3.connect(os.path.join(wd, "Cache", "probe.db"),
                              check_same_thread=False, timeout=30)
         db.execute("CREATE TABLE IF NOT EXISTS probe (md5 TEXT PRIMARY KEY, v INT, blob BLOB)")
+        # The size belongs in the key. A verdict is a pure function of two
+        # files' bytes *and the resolution they were compared at*, and the
+        # closer look measures the same pair again at 3200. Without the size
+        # here the second measurement replaced the first, and the next run
+        # loaded a 3200 residual as though it had been taken at 1600 — which
+        # moved 25 culls on one folder and left no trace anywhere.
+        if _needs_size(db, "verdict"):
+            db.execute("DROP TABLE IF EXISTS verdict")
         db.execute("CREATE TABLE IF NOT EXISTS verdict "
-                   "(a TEXT, b TEXT, v INT, js TEXT, PRIMARY KEY (a, b))")
+                   "(a TEXT, b TEXT, size INT, v INT, js TEXT, "
+                   " PRIMARY KEY (a, b, size))")
         db.execute("CREATE TABLE IF NOT EXISTS screen "
                    "(a TEXT, b TEXT, v INT, js TEXT, PRIMARY KEY (a, b))")
         return db
@@ -266,6 +275,15 @@ def _cache_open():
 _CACHED_SCALARS = ('sharp', 'w', 'h', 'tier', 'qmean', 'raw', 'meta', 'edited',
                    'maker', 'moved', 'upright', 'rendered',
                    'focal', 'exposure', 'exif_t')
+
+
+def _needs_size(db, table):
+    """True when this database predates the size being part of the key."""
+    try:
+        cols = [c[1] for c in db.execute("PRAGMA table_info(%s)" % table)]
+    except Exception:
+        return False
+    return bool(cols) and "size" not in cols
 
 
 def _pack(r):
@@ -1113,25 +1131,32 @@ def main(argv=None):
     _scache = {}
     _pending = {"verdict": [], "screen": []}
 
-    def _preload(table, version, into, decode):
+    def _preload(table, version, into, sized=False):
         """Pull this folder's cached answers into memory in one query.
 
         Asking the database per pair meant every worker thread queueing on one
         lock: on a 2,600-photo folder that was 558 of 563 seconds spent waiting
         rather than measuring, even with every answer already cached.
+
+        `sized` says the table keys on the resolution as well as the pair, and
+        the key is then read from the row rather than assumed. Assuming it was
+        the bug: every stored verdict came back under REVIEW_SIZE, including
+        the ones measured at CONFIRM_SIZE.
         """
         if db is None:
             return
         hs = sorted({h for h in _md5_of.values() if h})
         got = 0
+        cols = "a, b, size, js" if sized else "a, b, js"
         try:
             for k in range(0, len(hs), 400):
                 chunk = hs[k:k + 400]
-                for a_, b_, js in db.execute(
-                        "SELECT a, b, js FROM %s WHERE v = ? AND a IN (%s)"
-                        % (table, ",".join("?" * len(chunk))),
+                for row in db.execute(
+                        "SELECT %s FROM %s WHERE v = ? AND a IN (%s)"
+                        % (cols, table, ",".join("?" * len(chunk))),
                         [version] + chunk):
-                    into[decode(a_, b_)] = json.loads(js)
+                    into[tuple(row[:-1]) if sized else (row[0], row[1])] = \
+                        json.loads(row[-1])
                     got += 1
         except Exception:
             pass
@@ -1147,7 +1172,8 @@ def main(argv=None):
             try:
                 with _vlock:
                     db.executemany(
-                        "INSERT OR REPLACE INTO %s VALUES (?,?,?,?)" % table, rows)
+                        "INSERT OR REPLACE INTO %s VALUES (%s)"
+                        % (table, ",".join("?" * len(rows[0]))), rows)
                     db.commit()
             except Exception:
                 pass
@@ -1205,14 +1231,13 @@ def main(argv=None):
             while len(_vcache) > 40000:
                 _vcache.pop(next(iter(_vcache)))
         if ka and kb:
-            _pending["verdict"].append((ka, kb, VERDICT_VERSION,
+            _pending["verdict"].append((ka, kb, size, VERDICT_VERSION,
                                         json.dumps(v, default=float)))
         return v
 
     # One query each, before any pair is asked about.
-    _preload("verdict", VERDICT_VERSION, _vcache,
-             lambda a_, b_: (a_, b_, REVIEW_SIZE))
-    _preload("screen", SCREEN_VERSION, _scache, lambda a_, b_: (a_, b_))
+    _preload("verdict", VERDICT_VERSION, _vcache, sized=True)
+    _preload("screen", SCREEN_VERSION, _scache)
     for _v in _vcache.values():
         if _v.get("where") is not None:
             _v["where"] = tuple(_v["where"])
