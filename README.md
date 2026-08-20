@@ -52,12 +52,12 @@ in time** (bursts chained at under 3 seconds). Measured against exhaustive
 all-pairs comparison, this misses nothing.
 
 Which frame survives is decided by a ladder: carries a Live Photo's video →
-raw → resolution → nothing wrote it after the camera did → the camera's own
-marks → it proves it was saved again → the orientation flag is still set →
-finer quantization → metadata richness → compression tier → sharpness → file
-size.
+raw → not a computed depth blur → resolution → nothing wrote it after the
+camera did → the camera's own marks → not the spare frame of an HDR pair → it
+proves it was saved again → the orientation flag is still set → finer
+quantization → metadata richness → compression tier → sharpness → file size.
 
-Six of those rungs exist to keep originals, because a copy is only obvious
+Eight of those rungs exist to keep originals, because a copy is only obvious
 when it is smaller. Two of the four are evidence rather than inference: they
 say something happened to a file after the shutter, where every rung below
 them only says how big or how sharp it is.
@@ -71,6 +71,17 @@ moves it, which was true of every file an editor had signed and of 3% of the
 rest. It sits below resolution so a small edit can never beat a full frame, and
 it decides what nothing else can see — a red-eye fix, a colour conversion, a
 tonal change alter no dimension at all.
+
+**What the camera computed, and what it computed from.** A phone shooting HDR
+or Portrait writes two files for one press of the shutter and marks them in
+EXIF. The answer differs by kind, so these are two rungs. A **Portrait** pair is
+a depth blur and the frame it was computed from; the blur is an effect rather
+than a photograph, and it is written at the full sensor size while the untouched
+frame is smaller — so that rung sits above resolution, or the effect wins on
+pixels. An **HDR** pair is a merged exposure and the frame it was merged from,
+always at the same size, so that rung only has to outrank file size. Judged
+across 30 pairs: the untouched frame every time for Portrait, the merge every
+time for HDR.
 
 **Saved again** is the only rung the photograph proves about itself, without
 reference to metadata anyone could have copied across. A JPEG stores each block

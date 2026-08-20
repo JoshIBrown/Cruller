@@ -210,7 +210,7 @@ EDITORS = ("photoshop", "lightroom", "gimp", "photo gallery", "picasa",
            "snapseed", "pixelmator", "affinity", "luminar", "capture one",
            "acdsee", "corel", "on1", "photos ", "photoscape", "paint.net")
 
-PROBE_VERSION = 7      # the camera's own marks are read
+PROBE_VERSION = 8      # what the camera computed, and what it computed from
 
 
 # Verdicts are pure functions of two files' bytes as well, so the full-look
@@ -248,7 +248,7 @@ def _cache_open():
 # Only content-derived fields live in the cache. `path`, `bytes`, `md5` and
 # the capture-time fallback are per-file facts filled in at run time.
 _CACHED_SCALARS = ('sharp', 'w', 'h', 'tier', 'qmean', 'raw', 'meta', 'edited',
-                   'maker', 'moved', 'upright',
+                   'maker', 'moved', 'upright', 'faked', 'spare_of_hdr',
                    'focal', 'exposure', 'exif_t')
 
 
@@ -359,6 +359,7 @@ def _probe(path, md5=None):
         # same picture at the same size, the one that still knows when it was
         # taken is the earlier generation.
         meta, edited, maker, moved, upright = 0, False, False, False, False
+        faked = spare_of_hdr = False
         try:
             if is_raw(path):
                 meta = 2
@@ -400,6 +401,24 @@ def _probe(path, md5=None):
                 # Moved on 100% of files an editor signed, on 3% of the rest.
                 shot_at, written_at = sub.get(36867), ex.get(306)
                 moved = bool(shot_at and written_at and shot_at != written_at)
+                # A phone shooting Portrait writes two files for one press of
+                # the shutter and marks them here: 8 on the frame it computed a
+                # depth blur into, 9 on the frame it computed it from. Josh
+                # judged 20 of these and wanted the untouched frame every time
+                # — "the left has the fake blurry background". The blur is an
+                # effect, not a photograph, and it is the only one of these
+                # marks he had a view about: on 10 HDR pairs, 9 of his answers
+                # were that he could not tell them apart.
+                rendered_as = sub.get(41985)
+                faked = rendered_as == 8
+                # The other half of the same mark. Shooting HDR also writes two
+                # files, 3 on the merged exposure and 4 on the untouched frame,
+                # and there Josh wants the merge: on 10 pairs, 9 answers were
+                # that he could not tell them apart and the tenth preferred the
+                # merge — "background not blown out". So the untouched frame is
+                # the redundant one, which is the opposite of the Portrait case
+                # and the reason these are two rungs rather than one.
+                spare_of_hdr = rendered_as == 4
         except Exception:
             pass
         # Keypoints for the geometric screen, taken here because the frame is
@@ -420,7 +439,8 @@ def _probe(path, md5=None):
                     spts=spts, sdes=sdes, sshape=(int(SCREEN_W * g.shape[0] / g.shape[1]), SCREEN_W),
                     tier=quantization_tier(path), raw=is_raw(path), meta=meta,
                     qmean=quantization_mean(path), edited=edited,
-                    maker=maker, moved=moved, upright=upright,
+                    maker=maker, moved=moved, upright=upright, faked=faked,
+                    spare_of_hdr=spare_of_hdr,
                     exif_t=ex_t, md5=md5, bytes=os.path.getsize(path),
                     focal=shot['focal35'], exposure=shot['exposure'])
     except Exception as e:
@@ -784,9 +804,11 @@ def classify(keeper, other, v=None, dt=None):
 LADDER = (
     ("motion",   "no Live Photo video"),
     ("raw",      "not the raw"),
+    ("real",     "the blurred background is the camera's invention"),
     ("pixels",   "fewer pixels"),
     ("unedited", "something wrote it after the camera did"),
     ("camera",   "the camera's own marks are gone"),
+    ("merged",   "the camera merged a better exposure than this one"),
     ("once",     "it has been saved a second time"),
     ("upright",  "something turned it and reset the flag"),
     ("finer",    "more compressed"),
@@ -1190,6 +1212,14 @@ def main(argv=None):
         # rung because a raw is still a single instant.
         motion = 1 if has_motion(r['path']) else 0
         fmt_score = 1 if r['raw'] else 0        # the original always wins
+        # A computed depth blur loses to the frame it was computed from, and it
+        # has to sit above resolution to do it: the phone writes the blurred
+        # frame at the full sensor size and the untouched one smaller, so on
+        # pixels alone the effect wins. That is the one cull in 206 that Josh
+        # refused. Only the blur is demoted — the untouched frame ranks as any
+        # ordinary photograph does, so this changes nothing outside a pair the
+        # camera made together.
+        real = 0 if r.get('faked') else 1
         px = r['w'] * r['h']
         if r['raw'] and px == 0:
             px = 10 ** 9                      # unknown sensor size still beats any export
@@ -1211,7 +1241,12 @@ def main(argv=None):
         # carrying the camera's block.
         untouched = 0 if (r.get('edited') or r.get('moved')) else 1
         camera = 1 if r.get('maker') else 0
-        return (motion, fmt_score, px, untouched, camera)
+        # Below resolution, unlike its Portrait counterpart: an HDR pair is
+        # always the same size — 168 of 168 measured here — so this only ever
+        # decides once resolution has tied, and it can never cull a larger
+        # frame in favour of a smaller one somewhere else.
+        merged = 0 if r.get('spare_of_hdr') else 1
+        return (motion, fmt_score, real, px, untouched, camera, merged)
 
     def rank_cheap(i):
         """Every rung under `once` — all of them read from the record."""

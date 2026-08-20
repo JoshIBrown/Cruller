@@ -148,24 +148,29 @@ decides:
 1. **Motion** — a frame carrying a Live Photo's video, since the video travels
    with it when it is culled and no other rung can replace what that loses.
 2. **Format** — a raw beats a derived file.
-3. **Resolution** — more pixels.
-4. **Nothing wrote it after the camera did** — an editor named in the Software
+3. **Not a computed depth blur** — a Portrait render loses to the frame it was
+   computed from. Above resolution, because the blur is the larger file.
+4. **Resolution** — more pixels.
+5. **Nothing wrote it after the camera did** — an editor named in the Software
    tag, or a file clock moved away from the moment of capture.
-5. **The camera's own marks** — the private block a camera writes and an editor
+6. **The camera's own marks** — the private block a camera writes and an editor
    does not regenerate.
-6. **It proves it was saved again** — a comb of empty bins in the histogram of
+7. **Not the spare frame of an HDR pair** — the merged exposure outlives the
+   frame it was merged from. Below resolution: an HDR pair is always the same
+   size, so this can never cull a larger frame for a smaller one.
+8. **It proves it was saved again** — a comb of empty bins in the histogram of
    its stored coefficients, which one quantization cannot produce.
-7. **The orientation flag is still set** — a camera records which way up it was
+9. **The orientation flag is still set** — a camera records which way up it was
    held; software that turns a picture transposes the pixels and resets it.
-8. **Finer quantization** — the matrix read straight from the header.
-9. **Metadata richness** — the file that still knows when and how it was taken.
-10. **Compression tier** — less lossy.
-11. **Sharpness**.
-12. **File size**.
-13. **Path** — a coin toss, present only so the order is total and the plan
+10. **Finer quantization** — the matrix read straight from the header.
+11. **Metadata richness** — the file that still knows when and how it was taken.
+12. **Compression tier** — less lossy.
+13. **Sharpness**.
+14. **File size**.
+15. **Path** — a coin toss, present only so the order is total and the plan
     does not depend on the order the folder was scanned in.
 
-Rungs 4 to 7 are the only ones that are evidence rather than inference:
+Rungs 3 and 5 to 8 are the only ones that are evidence rather than inference:
 everything else is a property of one file, while those two say something
 happened to it after the shutter. They sit above the compression rungs because
 a re-save at higher quality beats its own source on those — measured on real
