@@ -142,6 +142,22 @@ decision. Narrowly: only the two combinations a camera writes, only with a
 shared capture time, and everything else still has to look alike. 56 of 57 now,
 the last being a pair whose group formed around a third frame.
 
+## A turn the alignment cannot see
+
+Orientation is applied before anything is measured, so a frame stored sideways
+and its upright twin line up with **no rotation at all** — one such pair here
+reads `rot=0.0` and a residual of 0.8%. The rule that looks for a quarter turn
+in the alignment can therefore never fire on the commonest shape of rotated
+copy: a camera frame carrying an orientation flag beside a copy with the pixels
+baked and the flag cleared. Nineteen captures in this library are that shape,
+and the tool was keeping the right frame in every case but calling it a plain
+near-duplicate, so all of them reached the review.
+
+What gives it away is the stored dimensions being transposes of each other,
+which is read alongside the same agreement test every other lineage claim uses.
+Ten of the nineteen now settle; the rest have residuals of 10.5% and worse
+against a limit of 10, so the tool declines to call them one picture.
+
 ## Detecting an upscale
 
 **Here:** nothing. Resolution decides, so given an original and an enlarged

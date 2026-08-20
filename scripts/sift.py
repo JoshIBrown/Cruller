@@ -703,6 +703,20 @@ def has_motion(path, _seen={}):
 CONFIRM_SIZE = 3200
 
 
+def pictures_agree(v):
+    """Do the two frames hold the same picture, by the alignment's own numbers?
+
+    The evidence every lineage claim rests on: either what is left after
+    warping one onto the other is small, or it is small against the texture
+    already there.
+    """
+    if not v:
+        return False
+    block, rel = v.get("block"), v.get("ratio")
+    return ((block is not None and block * 100 <= DERIVED_MAX)
+            or (rel is not None and rel <= DERIVED_RATIO))
+
+
 def derivative_kind(v, dt):
     """Crop, quarter turn or tone change within one capture — provable lineage.
 
@@ -721,9 +735,7 @@ def derivative_kind(v, dt):
     """
     if v is None or dt is None or dt >= 2.0 or v.get("scene") != "same":
         return None
-    block, rel = v.get("block"), v.get("ratio")
-    agrees = ((block is not None and block * 100 <= DERIVED_MAX)
-              or (rel is not None and rel <= DERIVED_RATIO))
+    agrees = pictures_agree(v)
     z = v.get("zoom") or 1.0
     if agrees and ((v.get("b_in_a") == 1.0 and z <= 0.91) or
                    (v.get("a_in_b") == 1.0 and z >= 1.10)):
@@ -843,6 +855,17 @@ def classify(keeper, other, v=None, dt=None):
     kind = derivative_kind(v, dt)
     if kind:
         return kind
+    # A quarter turn baked into the pixels. The alignment cannot report this
+    # one: orientation is applied before anything is measured, so a frame
+    # stored sideways and its upright twin line up with no rotation at all —
+    # the pair above reads rot=0 and a residual of 0.8%. What gives it away is
+    # the stored shape, one being the transpose of the other. Nineteen captures
+    # in this library are that shape and every one was reaching the review as a
+    # plain near-duplicate, though the keeper was already right.
+    if (keeper['w'] and keeper['h']
+            and keeper['w'] == other['h'] and keeper['h'] == other['w']
+            and keeper['w'] != keeper['h'] and pictures_agree(v)):
+        return "rotated"
     if op and kp and op < kp * 0.9 and structure_agrees(keeper, other):
         return "smaller"
     if (other['tier'] > keeper['tier'] + 1
