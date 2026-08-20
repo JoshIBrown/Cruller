@@ -62,9 +62,9 @@ one — and returns 41% of the time. Tightening further keeps paying, but more
 slowly and at twice the cost in culls, so the current setting sits at that
 knee.
 
-This threshold is not the dial. The dial decides how different two frames may
+This threshold is not the limit. The limit decides how different two frames may
 be and still count as the same photograph; this decides which pairs are ever
-compared at all. A pair the pool never nominates is never measured, so no dial
+compared at all. A pair the pool never nominates is never measured, so no limit
 setting can recover it.
 
 **Does this miss duplicates?** It was checked directly, by comparing every
@@ -140,10 +140,14 @@ The long edge lands between 2,000 and 3,999 pixels. Halving once more was
 measured and rejected: it moves the keeper in about 7% of groups and shifts
 which photographs get culled, to save 3–6% of a run.
 
-## Sharpness, and which frame survives
+## Which of two copies survives
 
-The keeper is chosen by a ladder, and the first rung that separates two files
-decides:
+**Round one only.** This ladder answers "which of these two files is the copy",
+which is a question about files. Round two asks which photograph you like, and
+nothing on this list is a substitute for an answer to that — the tool proposes
+nothing there.
+
+The keeper is chosen by the first rung that separates two files:
 
 1. **Motion** — a frame carrying a Live Photo's video, since the video travels
    with it when it is culled and no other rung can replace what that loses.
@@ -180,8 +184,8 @@ original.
 The rung that decides is also the phrase the tool prints, taken from the same
 list, so the two cannot disagree.
 
-Sharpness settles about 69% of them, so it is worth stating exactly what it
-measures. The image is divided into a grid; in each tile the variance of a
+Sharpness settles about 69% of the pairs that reach it, so it is worth stating
+exactly what it measures. The image is divided into a grid; in each tile the variance of a
 Laplacian is taken, which is large where edges are crisp and small where they
 are soft. Tiles are weighted towards the centre of the frame, and the sharpest
 few are averaged.
@@ -196,75 +200,81 @@ The measure has a known blind spot. Between two frames where one is grainier,
 it can prefer the noisier one, because noise is high-frequency detail and that
 is what the Laplacian responds to.
 
-## The limit, and the dial
+## The limit
 
-A pair is a duplicate when its difference sits under one limit. There is one
-limit for a whole folder, moved on a dial from 0 to 100, and the person
-choosing what goes in the folder sets the standard for it.
+A pair is one photograph when its difference sits under one limit. One limit for
+a whole folder — no second limit, and no subject detector.
 
-An earlier design split the limit in two — one for photographs containing a
-person or animal, a looser one for scenery — with a detector deciding which
-applied. It was removed. The detector missed small subjects entirely, which
-meant a bird in a landscape was silently judged by the loose limit, and the
-whole mechanism was invisible: nothing in the interface showed which limit a
-pair had been given. Curating the folder does the same job and can be seen.
+An earlier design split the limit in two: one for photographs containing a
+person or animal, a looser one for scenery, with a detector deciding which
+applied. It was removed. The detector missed small subjects entirely, so a bird
+in a landscape was silently judged by the loose limit, and the whole mechanism
+was invisible — nothing in the interface showed which limit a pair had been
+given. Curating the folder does the same job and can be seen.
 
-Rather than asking you to guess a number, a run offers the settings as a list,
-each described by what it offers rather than what it takes: how many groups it
-makes, and how many photographs are in them. Nothing more, because nothing more
-is known — how many would move and how much that frees both assume every one of
-the tool's picks is accepted, which is precisely the question the review exists
-to ask. Nothing in the list is settled — a setting decides how widely
-to group, and which frames survive a group is decided by a person — so a count
-of culls would describe an outcome nobody has agreed to.
+There was also a dial: a run offered several limits as a list and you chose one
+before the review. That went when round two stopped proposing culls. The dial
+existed to let a person tune how much the tool would take, and round two takes
+nothing — it gathers scenes and a person keeps what they want, so the question
+the dial answered is now asked of every scene directly, by looking at it.
 
-One row per distinct answer. Two settings holding the same groups are one
-choice written twice, whatever limits produced them, and a setting holding no
-groups is not a choice at all — which the lowest one usually is not, once the
-copies have been settled, because settling them is what it would have offered.
+## Gathering a scene
 
-**The list comes first and nothing is rendered until you choose.** The review
-is built only for the outcome you choose, and only that outcome can be applied
-— so nothing is ever applied that has not been looked at.
+Round two does not use the limit above, or the funnel, or the ladder. It asks a
+different question — *have I taken too many of this?* — and the machinery for
+"are these the same photograph" answers it badly. Measured on a folder of 8,000
+nature photographs, the longest burst in it came out as **no group at all**:
+fifty-five frames of a bird in flight, no two of them the same photograph.
 
-**How the options are chosen.** The dial runs from 0 to 100, but most settings
-answer the same as their neighbour, and the interesting ones bunch at the low
-end — the difference between 2 and 3 matters, the difference between 70 and 80
-rarely does. So the tool lays a ladder across the range, close together at the
-bottom and spreading towards the top.
+So a scene is built from two things, cheap one first.
 
-**The ends are fixed.** The first setting is a difference of nothing at all and
-the last is anything that aligns, because at the ends the dial stops being a
-judgement: one keeps everything the tool cannot prove, the other keeps nothing
-it can group. Those are the two settings somebody reaches for when they want to
-be sure in either direction.
+**One shoot.** Photographs within ninety minutes of each other. That number is
+read off the library rather than chosen: the gaps between consecutive shots run
+smoothly from fractions of a second upward with no natural cliff, until about
+ninety minutes, where the largest single jump in the sorted gaps sits and 96% of
+all gaps fall below.
 
-**The three between are spaced by how many photographs they cull**, since that
-is the quantity being chosen along. They are first guessed from the pairs — the
-most thorough setting's plan holds every pair the tool would ever cull, and
-each pair's own numbers say the lowest setting at which it qualifies — and then
-corrected against what they actually culled, because a pair qualifying is not
-the same as a photograph being culled: raising the limit merges groups, and one
-merge can carry several files at once.
+**One scene.** Within a shoot, a photograph joins when its sketch agrees with
+the scene's *own average* at 0.85 or better — not with whichever frame happens
+to sit next to it. That distinction is the whole thing. Agreeing with a
+neighbour lets a scene walk: a chain of neighbours ran from 2013 to 2019, one
+photograph at a time, and held pairs that were anti-correlated. Measured against
+the middle, the worst pair inside the largest scene went from −0.06 to 0.53.
 
-Both ends are always offered, so five is the usual list. A folder with no
-provable copies culls nothing at the first setting, and saying so is worth a
-line. Fewer than five means the folder genuinely has fewer answers — a folder
-of nothing but exact copies culls the same set at every setting, and repeating
-one answer five times would be a list that lies about having a choice in it.
+Growing from the middle is also what holds a scene together while it changes —
+the sun goes down and the colour moves through it, the eagle turns its head and
+opens its wings, and every frame still agrees with what the scene is about.
 
-That matters because weighing a setting is not cheap. Each one walks the whole
-candidate set again — about ten seconds on a folder of a thousand photographs —
-so the count is the cost. Searching for exact boundaries instead took
-seventeen settings to offer the same five.
+**Where 0.85 came from.** Frames of one burst agree at 0.918 and frames of
+different bursts at 0.343, so anything between is defensible. What settles it is
+the difference between two real scenes: an evening of one sunset holds together
+at 0.89, while eighteen views along a five-hour hike — all peaks and trees under
+sky, every one a different place — sit at 0.76. At 0.85 the sunset stays whole
+and the hike disperses, which is the right way round.
 
 ## The review
 
-Choosing a setting opens a page holding **every group that setting would cull
-from**, one section each. A group is the unit a person actually decides about:
-these are the same photograph, so which of them survives? Nothing is left out —
-a relationship the tool can prove is still a photograph leaving, and a proof
-nobody looked at is only a claim.
+One page, one section per group, used by both rounds — because it is the same
+act either way: looking at a set of photographs and saying which to keep.
+
+What differs is the starting point. **Round one arrives with a plan**, so its
+groups start read and leaving one alone means the plan stands. **Round two
+arrives with nothing chosen**, so its groups start unreviewed, and leaving one
+alone means exactly nothing.
+
+That gives a group four states, and only three can be read from the checkboxes:
+keeping some, keeping all, keeping none. The fourth is **unreviewed**, which
+looks identical to keeping none and means the opposite. So it is held and shown
+rather than inferred — dimmed, with a grey edge down the section, against a
+green edge for a group that has been decided.
+
+The consequence matters more than the display: an unreviewed scene cannot lose
+a photograph, and not because a rule protects it. Nothing exists that says it
+should go.
+
+Nothing is left out of round one's page either — a relationship the tool can
+prove is still a photograph leaving, and a proof nobody looked at is only a
+claim.
 
 **Every photograph of a group on screen together.** Choosing between twelve
 frames means looking back and forth between them, comparing this one against
@@ -317,32 +327,44 @@ two opinions about the same folder, and the second does not cancel the first.
 is left out of the page, and anything left out was never seen, so it cannot
 have been agreed to. Culling it would be culling unseen.
 
-## Culls decided by rule
+## Round one's rules
 
-Some relationships are provable rather than judged. They are still shown —
-a proof nobody looked at is only a claim — but they are grouped on evidence
-rather than on a measured difference:
+Ten of them, one file each in `scripts/derived/`, asked in order — the first
+that holds gives the answer, and a pair no rule can account for goes to round
+two. Each file opens with the name it produces, so landing in `rotated.py` tells
+you what you are reading.
 
-- **Identical picture** — the decoded images match exactly.
-- **Smaller copy** — the same picture at lower resolution.
-- **Cropped copy** — one frame's warp lands entirely inside the other.
-- **Tonal edit** — identical geometry, shifted brightness or contrast.
-- **Rotated copy** — a quarter-turn of the same capture.
-- **Export of a raw**, **resave** — derived files beside their original.
+    duplicate   the same bytes under another name
+    non-hdr     the frame the camera merged its HDR exposure from
+    fake-blur   the depth blur it computed, beside the frame it came from
+    identical   the same pixels in a different file, proven by a full decode
+    export      a JPEG whose raw original is here too
+    crop        a crop of the frame being kept
+    rotated     a quarter turn of it
+    edited      the same geometry with the tone moved
+    smaller     the same picture at a lower resolution
+    resave      the same picture, saved again more heavily
 
-These are one rule wearing several labels. Each says the same thing — this
-file is not the original, and the original is here — and the label records how
-the copy was made, which is a note rather than a separate decision.
+The order is the priority and it is not arbitrary: cheap and certain first, then
+what must be argued from geometry, then the two that rest on file properties
+alone.
+
+Every name says what is wrong with the file being *removed*, not how the two are
+related, so it reads as an instruction — *this one is a crop, delete it*. They
+are one idea wearing ten labels: this file came from that one, and that one is
+still here.
 
 The provable relationship *is* the answer: a crop or a tone change is grouped
 regardless of how large its measured difference is, because the edit is exactly
 what makes the difference large, and the edit is what should go.
 
-**A label may claim derivation only if it proves it.** Three do so on their
-own — a containment warp, a quarter turn, an untouched geometry with the tone
-moved. Three do not: being a raw beside a JPEG, holding fewer pixels, or
-carrying a coarser quantization table are facts about two files, not about a
-relationship between them. Those must also show the two pictures agree, by
+**A rule may claim derivation only if it proves it.** Three do so on their own —
+a containment warp, a quarter turn, an untouched geometry with the tone moved.
+Those three also prove *membership*: each is a change that moves the residual by
+its own nature, so refusing them for reading far apart would be refusing them
+for being what they are. The rest do not: being a raw beside a JPEG, holding
+fewer pixels, or carrying a coarser quantization table are facts about two
+files, not about a relationship between them. Those must also show the two pictures agree, by
 comparing their sketches with brightness and contrast removed, so the question
 asked is "the same picture?" and not "the same tone?". A pair that cannot show
 it is a near-duplicate, and is labelled one.
@@ -362,25 +384,32 @@ coin flip between a real crop and an optical zoom.
 
 ## Knowing how often it is wrong
 
-The review shows the biggest differences first, which is the right order to
-read but the wrong sample to count. Reviewing more of it describes the pairs
-already thought marginal; it says nothing about the rest, and a reviewer's
-disagreement rate measured across such a list came out flat — 13%, 10%, 13% by
-third — so the ordering carries no information about where mistakes are.
+The two rounds can be wrong in different ways, and only one of them can be
+counted.
 
-It is also the wrong exercise to count. Reviewing a plan means being told
-which frame the tool chose every time, and a judgement made after being told
-is not a judgement of the tool.
+**Round one** makes a claim that is either true or false — this file came from
+that one — so it can be checked exactly, and has been. Across ten folders,
+every one of its 279 culls was either verified without the tool's help
+(`identical` 114 of 114 pixel-for-pixel; `smaller` 32 of 32 by shrinking the
+keeper and comparing; `duplicate` by hash) or looked at by eye. None was wrong.
+Three rules were found under-firing during that check — camera pairs at 27 of
+57, `rotated` at 0 of 19 — and none of them was over-firing.
 
-So the error rate comes from a separate draw: culls taken uniformly at random
-from what a setting would move, shown with the answers covered — no labels, no
-filenames, and the side each frame lands on decided by a coin, so the layout
-itself gives nothing away. Thirty gives a range about ten points wide, a
-hundred about six. The interval is Wilson's, which behaves at small counts and
-near-zero rates, where the textbook interval returns a negative lower bound.
+The suite holds a case per rule, each built so that removing the rule it guards
+makes it fail. That is the property worth having: a test that passes whether or
+not the code is there tests nothing.
 
-Anything else — including "the reviewer approved the review" — is a number
-about the sample rather than about the plan.
+**Round two** decides nothing, so it has no error rate. Its mistake is a scene
+gathered badly — too loose and unrelated photographs arrive together, too tight
+and one burst becomes four — and there is no measurement for that, only looking.
+The two cases that set its threshold were found that way: a sunset that must
+stay whole, and a hike that must come apart.
+
+There was once a blind audit mode, which drew culls at random and hid the tool's
+verdict so a reviewer's answers meant something. It served the design where the
+tool proposed everything. Round one is now checked cull by cull rather than
+sampled, and round two proposes nothing to audit, so it was removed; it is kept
+in `project/archive/` for reference.
 
 ## Safety
 

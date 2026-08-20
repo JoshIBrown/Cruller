@@ -55,7 +55,12 @@ SSIM has its own documented limits — it assumes local structures matter
 equally, and it does not handle spatial distortion — but the frames here are
 aligned before comparison, which is the condition it wants.
 
-## Choosing which frame survives: sharpness
+## Choosing which of two copies survives: sharpness
+
+**Round one only.** This decides which of two *files* is the copy, and it is the
+last rung of the ladder to be reached — most pairs are settled above it, by a
+raw beside an export or a mark the camera left. Round two never asks: a person
+picks the frame they like, and no focus measure substitutes for that.
 
 **Here:** the variance of a Laplacian per tile, weighted towards the centre,
 averaging the sharpest few tiles.
@@ -218,7 +223,10 @@ and they both spoke, and proved one direction the marks could not.
 
 ## Choosing the best frame of a burst
 
-**Here:** not attempted. Every distinct frame is kept.
+**Here:** not attempted, and now deliberately out of scope. Round two gathers a
+burst into a scene and puts every frame of it in front of a person, largest
+scene first. Picking the frame where somebody is smiling is the thing being
+asked of them, not of the tool.
 
 **In the literature:** no-reference image quality assessment. BRISQUE scores
 naturalness from local luminance statistics against a model trained on known
@@ -228,7 +236,29 @@ burst-selection systems combine a global quality filter with a content
 comparison, which is close to the shape this would need.
 
 **Why it stays unattempted:** picking the frame where somebody is smiling is a
-judgement about content, and no quality metric answers it.
+judgement about content, and no quality metric answers it. What changed is that
+this is no longer a gap — it is the division of labour. The tool finds the
+fifty-five frames; the person picks the one.
+
+## Gathering a scene, and why not with the same instrument
+
+**Here:** capture time proposes a shoot and the sketch splits it into scenes,
+each frame joining on agreement with the scene's own average. Nothing that
+decides round one is used.
+
+**Why not.** The obvious thing is to reuse the residual — it already answers
+"are these two the same picture" very well. It answers the wrong question.
+Measured on 8,000 nature photographs, the longest burst in the folder came out
+as **no group at all**: fifty-five frames of a bird in flight, and no two of
+them the same photograph. The instrument built to refuse near-misses refuses an
+entire scene.
+
+**In the literature:** this is event or session clustering, usually time-first
+with content used to refine, which is the shape arrived at here independently.
+The refinement is normally agglomerative, and the choice of linkage is exactly
+where it goes wrong — single linkage lets a cluster walk. That was reproduced
+here before it was read about: chaining neighbour to neighbour ran a scene from
+2013 to 2019, holding pairs that were anti-correlated.
 
 ## What follows from all this
 

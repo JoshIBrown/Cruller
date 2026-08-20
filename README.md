@@ -1,19 +1,48 @@
 # PhotoCruller
 
-Point it at a folder of photographs. It finds the near-duplicates, decides which
-frame to keep, and moves the rest to a holding folder with a log.
+Point it at a folder of photographs. It settles the copies, gathers what is left
+into scenes, and lets you keep what you want from each.
 
-**Nothing is ever deleted.** Every run is reversible with one command.
+**Nothing is ever deleted.** Everything it removes moves to a holding folder
+with a log, and one command puts it all back.
 
 ```bash
-./crull "/path/to/some/photos"          # analyse, then review every cull in a page
-./crull "/path/to/some/photos" --apply  # skip the review, move the redundant files
-./crull --undo "<job name>"             # put them all back
+./crull "/path/to/some/photos"          # the two rounds, with review
+./crull "/path/to/some/photos" --apply  # take the plan as it stands
+./crull --undo "<job name>"             # put a job back
 ./crull --reset                         # undo everything, clear every cache
-./crull "/folder" --audit               # judge 30 culls at random, blind, for a rate
 ```
 
 macOS users can drag a folder onto `PhotoCruller.app` instead.
+
+## Two rounds, two questions
+
+**Round one — copies.** Where one file came from another that is also here, a
+rule names it and it goes. Ten rules, one file each in `scripts/derived/`, asked
+in order:
+
+    duplicate   byte-identical to the one being kept
+    non-hdr     the frame the camera merged its HDR exposure from
+    fake-blur   a depth blur the camera computed, not the frame it shot
+    identical   the same pixels in a different file, proven by a full decode
+    export      a JPEG whose raw original is also here
+    crop        a crop of the frame being kept
+    rotated     a quarter turn of it, with the orientation flag reset
+    edited      the same geometry with the tone moved
+    smaller     the same picture at a lower resolution
+    resave      the same picture, more heavily compressed
+
+Each says what is wrong with the file being removed, so it reads as an
+instruction: *this one is a crop, delete it.* Every rule must prove its case —
+the pictures agreeing, a containment warp, a mark the camera wrote — and one
+that cannot say nothing, leaving the pair to round two.
+
+**Round two — scenes.** What survived is gathered into scenes: one shoot's worth
+of one subject. A shoot is photographs within ninety minutes of each other; a
+scene is the ones inside it that look alike. Nothing here is provable, so the
+tool chooses nothing. It shows each scene, largest first — the thing you took
+most photographs of — and you keep what you want. The rest of that scene moves
+out with the copies, and a scene you never review is left whole.
 
 ## How it decides
 
@@ -35,15 +64,18 @@ cheap ones only ever say *no*:
    *different* overturns the earlier answer; where the closer look cannot tell,
    it says nothing. Paid only by pairs already judged duplicates.
 
-A pair is a duplicate when that residual sits under one limit, which you move
-on a dial from 0 to 100. There is no second limit and no subject detector — the
-person choosing what goes in a folder sets its standard.
+A pair is one photograph when that residual sits under the limit. One limit, no
+second one, no subject detector.
 
-The dial governs pairs that are *judged*. A pair that can be **proved** derived
-— one frame's warp landing inside the other, a quarter turn, or identical
-geometry with the tone moved — is grouped whatever it measures, because the
-edit is exactly what makes the difference large. So even at 0 the tool culls
-provable copies, and no setting spares them.
+A pair that can be **proved** derived — one frame's warp landing inside the
+other, a quarter turn, identical geometry with the tone moved — belongs together
+whatever it measures, because the edit is exactly what makes the difference
+large. Refusing those for reading far apart would be refusing them for being
+what they are.
+
+All of that is round one. Round two never asks this question: a burst of a bird
+in flight is one scene and no two frames of it are the same photograph, so it
+reads a sketch instead. See below.
 
 Candidates come from two pools, unioned: photographs that **look alike** (a
 frequency signature of the sketch — its low frequencies, thresholded, with
@@ -57,10 +89,14 @@ camera did → the camera's own marks → not the spare frame of an HDR pair →
 proves it was saved again → the orientation flag is still set → finer
 quantization → metadata richness → compression tier → sharpness → file size.
 
-Eight of those rungs exist to keep originals, because a copy is only obvious
-when it is smaller. Two of the four are evidence rather than inference: they
-say something happened to a file after the shutter, where every rung below
-them only says how big or how sharp it is.
+That ladder settles **round one only** — which of two files is the copy. It has
+nothing to say about round two, where a person picks the frame they like and no
+measurement is a substitute for that.
+
+Eight of its rungs exist to keep originals, because a copy is only obvious when
+it is smaller. Four are evidence rather than inference: they say something
+happened to a file after the shutter, where every rung below them only says how
+big or how sharp it is.
 
 **Nothing wrote it after the camera did** reads two things. An editor signs the
 Software tag, which is decisive but rare — 83% of an ordinary library carries a
@@ -141,53 +177,59 @@ them).
 
 A run does two things, and they are asked separately.
 
-**First the copies.** Where the same picture sits in more than one file, there
-is nothing to judge, so those are counted, their reasons named, and offered as
-one decision: apply, look through them first, skip, or stop. Settling them also
-keeps the grouping honest — a folder holding three copies of everything groups
-strangely until they are gone.
+**Round one — the copies.** Where one file came from another that is also here,
+there is nothing to judge, so they are counted, their reasons named, and offered
+as one decision:
 
-**Then the grouping.** You are offered the settings the dial can produce, each
-described by what it puts in front of you rather than what it would take:
+    ROUND ONE · copies
+    25 files here came from another file that is also here · 65 MB
+        13  non-hdr     the frame the camera merged its HDR exposure from
+        11  crop        a crop of the frame being kept
+         1  identical   the same pixels in a different file
 
-    1    10 groups    20 photographs
-    2    44 groups    94 photographs
-    3    89 groups   209 photographs
-    [1-3] review  ·  [q]uit
+    each one is provable, and named. nothing else is touched.
+    [r]eview them  ·  [a]pply  ·  [s]kip  ·  [q]uit
 
-Nothing there is settled, so the list says only how much there is to look at.
-How many would go, and how much that frees, depend on which frames you keep —
-which is the question the review asks. Choosing a setting opens a page in your
-browser, **one section per group**, and the answer is yours.
+Settling them first also keeps round two honest — a folder holding three copies
+of everything gathers strangely until they are gone.
 
-Each group shows **every photograph in it at once**, in the order they were
-taken, with the frame the tool would keep outlined. Click any photograph to
-keep or drop it; a group can end up keeping one, several, all of them — which
-refuses the group — or none, which moves the lot.
+**Round two — the scenes.** What survived is gathered into scenes and each is
+put in front of you, largest first, because the scene there are most of is where
+attention buys the most.
 
-**Groups come biggest first**, because that is where attention buys the most: a
-group of twelve is eleven photographs you might not need. Safety is not the
-review's job — the rules cull only what they can prove, and everything here is
-a choice about which frames you want.
+    ROUND TWO · scenes
+    33 scenes · 101 photographs · the biggest holds 13
+    nothing is chosen for you here. keep what you want from each;
+    a scene you do not review is left alone.
 
-**Apply** moves everything still marked to go; **Quit** moves nothing and hands
-you back the settings. Both close the page and write down every judgement, per
-photograph, because an opinion about a photograph is the one thing here that
-cannot be worked out again.
+The page shows **one section per scene**, every photograph in it at once, in the
+order they were taken. Click a photograph to keep it; **keep all** and **keep
+none** decide a whole scene at once.
 
-**The outlined frame is a starting position, not a decision.** See the ladder
-above for how it is chosen, and how much of that is measured rather than
-guessed.
+A scene is in one of four states, and the page says which: **unreviewed**,
+**keeping some**, **keeping all**, **keeping none**. Unreviewed is the one that
+matters — it looks exactly like keeping none and means the opposite, so it is
+shown rather than guessed at, and an unreviewed scene cannot lose a photograph.
+Not because a rule protects it, but because nothing exists that says it should
+go.
+
+**Move what I did not keep** moves the rest of every scene you reviewed. **Quit**
+moves nothing. Both write down every judgement, per photograph, because an
+opinion about a photograph is the one thing here that cannot be worked out
+again.
 
 ### How often is it wrong?
 
-    ./crull "/some/folder" --audit
+Round one has been checked cull by cull. Across ten folders every one of its
+279 culls was either verified exactly — `identical` 114 of 114 pixel-for-pixel,
+`smaller` 32 of 32, `duplicate` by hash — or looked at by eye, and none was
+wrong. The suite in `project/` holds a case for every rule, each built so that
+removing the rule it guards makes it fail.
 
-Reviewing the whole plan tells you what a folder needs, but not the tool's
-error rate — by the end you have seen the answers. This asks the same question
-with the answers covered: culls drawn at random, no labels, and the side each
-frame lands on decided by a coin. It reports the share that were wrong and the
-range the true rate lies in.
+Round two cannot be wrong in the same way, because it decides nothing. Its
+mistake is a scene gathered badly — too loose and unrelated photographs arrive
+together, too tight and a burst is split — and the only test for that is
+looking.
 
 ## Installing
 
