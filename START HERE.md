@@ -39,109 +39,69 @@ Two commands per folder.
 
     ./crull "/path/to/some/photos"
 
-Changes nothing on its own. It works out what it would move, then hands you
-the settings and the review.
+Changes nothing on its own. It reads the folder, settles the copies it can
+prove, and gathers the rest into scenes for you to choose from.
 
 While it works you'll see a progress bar for each stage:
 
     checking files         [################################] 100%  5,000/5,000
     reading photos         [##########################------]  83%  4,150/5,000
     comparing photos       [#########-----------------------]  28%  1,400/5,000   4m10s left
+    grouping by scene      [################################] 100%
 
-Checking is fast — it recognises photos it has read before, so a folder you
-have run once mostly skips straight to comparing.
+### Round one — the copies
 
-Reading is the slow part on a big folder — roughly a thousand photos a minute
-for raws, faster for JPEGs. Comparing uses every core you have.
+Where one file came from another that is also here, a rule names it. Ten rules,
+and each says what is wrong with the file being removed rather than how the two
+are related, so the list reads as instructions:
 
-**2. Review**, in a page that opens in your browser, one section per group.
+    ROUND ONE · copies
+    21 files here came from another file that is also here · 118 MB
+           8  crop        a crop of the frame being kept
+           7  resave      the same picture, more heavily compressed
+           5  smaller     the same picture at a lower resolution
+           1  rotated     a quarter turn of it, with the orientation flag reset
 
-A **group** is a set the tool believes are the same photograph. Some of them
-are to be moved; the review is where you decide which.
+    each one is provable, and named. nothing else is touched.
+    [r]eview them  ·  [a]pply  ·  [s]kip  ·  [q]uit
 
-**Every photograph in the group at once**, in the order they were taken, with
-the frame the tool would keep outlined. Choosing between twelve frames means
-looking back and forth between them, which is why they are all on screen rather
-than one at a time.
+One keypress, no Enter. **r** opens the same page round two uses, with the
+tool's plan already in it, so you can disagree with any of it. **a** takes the
+plan as it stands. **s** leaves the copies alone and goes on to the scenes.
 
-**Click any photograph** to keep or drop it — green outline stays, red goes,
-and the dimmed ones are leaving. *Keep all* refuses the group entirely; *keep
-none* moves the lot. The caption under each frame gives its time and size.
+Every one of these has been checked against your own library — 279 culls across
+ten folders, none of them wrong — which is why looking is optional here and not
+in round two.
 
-**Groups come biggest first.** That is where your attention buys the most: a
-group of twelve is eleven photographs you may not need. Ordering by risk would
-be the wrong idea, because risk is not what the review handles — the rules cull
-only what they can prove, and what reaches you here is a choice about which
-frames you want to keep.
+### Round two — the scenes
 
-At the bottom: **Apply** moves everything still marked to go, **Quit** moves
-nothing and hands you back the settings. Both close the page and write down
-every judgement.
+What survived is gathered into scenes: one shoot's worth of one subject. A
+shoot is photographs within ninety minutes of each other, and a scene is the
+ones inside it that look alike.
 
-**The starred frame is a guess, not an answer.** The tool picks one per group
-from a ladder — raw first, then resolution, metadata richness, compression,
-sharpness — and sharpness decides about 69% of them, on the rung with the least
-evidence behind it. One click overrides it.
+    ROUND TWO · scenes
+    44 scenes · 209 photographs · the biggest holds 31
+    nothing is chosen for you here. keep what you want from each;
+    a scene you do not review is left alone.
 
-**One menu, and you drive.** Before asking anything, the tool works out which
-settings give genuinely different answers, and offers those:
+A page opens with **one section per scene, biggest first** — the scene there are
+most photographs of is where your attention buys the most. Every photograph of a
+scene is on screen at once, in the order they were taken, because choosing
+between thirty frames means looking back and forth between them.
 
-        1   cull 48 of 200    24.0% of the folder    27 MB
-        2   cull 50 of 200    25.0% of the folder    33 MB
-        3   cull 51 of 200    25.5% of the folder   104 MB
-        4   cull 54 of 200    27.0% of the folder   287 MB
-        5   cull 60 of 200    30.0% of the folder   612 MB
-      [1-5] review  ·  [q]uit
+Click a photograph to keep it. **keep all** and **keep none** decide a whole
+scene at once.
 
-One keypress, no Enter. **Nothing is rendered until you ask for it.** Press a
-number and that outcome is built and opened in the review page. Nothing can be
-applied that you have not seen.
+Each scene shows which of four states it is in: **unreviewed**, **keeping
+some**, **keeping all**, **keeping none**. Unreviewed is the important one — it
+looks exactly like keeping none and means the opposite — so it is shown rather
+than guessed at, dimmed with a grey edge, against green for a scene you have
+decided. **An unreviewed scene cannot lose a photograph.**
 
-Applying finishes the folder. Drop several at once and it moves straight to the
-next rather than asking to be let past each one. Changing your mind afterwards
-is one gesture: drop the job's folder from `Culled Photos` back on the app, or
-name it to `--undo`.
+At the bottom: **Move what I did not keep** moves the rest of every scene you
+reviewed. **Quit** moves nothing. Both write down every judgement.
 
-Settings that give the same answer are never offered twice, so there is
-nothing in between to hunt for.
-
-Working out the list is quick even on a large folder: culling can only ever
-increase as the limit rises, so two settings that agree rule out everything
-between them, and the tool checks a handful of boundaries instead of every
-setting. Re-deciding then takes about a second, whatever the folder cost to
-read.
-
-The list is worth reading on its own. A folder that runs 48 to 60 across its
-entire range, as this one does, has almost nothing to find.
-
-**Applying finishes the folder**, so a queue of them moves straight to the
-next rather than asking to be let past each one. Changing your mind is one
-gesture afterwards: `--undo`, or drop the job's folder from `Culled Photos`
-back on the app.
-
-Each job's log is kept and numbered, so what moved where stays on record.
-
-The limit applies to this folder only. It is written into the job's records so
-you can see later what standard a cull was held to, and the next folder starts
-from the default again.
-
-**3. Move**, if you're happy:
-
-    ./crull "/path/to/some/photos" --apply
-
-Files go to `Culled Photos/<date> - <folder>` inside your working folder.
-Nothing is deleted. The
-dashboard refreshes itself. A culled photo's sidecar (`.xmp`, `.aae`) and its
-Live Photo video (`.mov`) travel with it and come back with `--undo`.
-
-Applying also records the pairs you reviewed in `Records/labels.csv`, and the
-limit that folder was judged at in `Records/<job> - settings.txt`, so a cull can
-always be traced back to the standard it was held to.
-
-Tip: instead of typing a path, type `./crull ` and then drag the folder from
-Finder into the Terminal window. It pastes the path, quoted correctly.
-
-## How it decides two photos are the same
+## How it decides two photos are the same — round one
 
 Every judgement is made by lining the two frames up — rotation, zoom and
 perspective, not just a shift — and then looking at what is left over, at a
@@ -165,6 +125,24 @@ properly. That is what keeps a folder of bursts affordable.
 against black, anything too dark or too smooth to find landmarks in — it says so
 and keeps both. It would rather leave you two photos than cull on a guess.
 
+## How it gathers a scene — round two
+
+None of the above. Round two asks a softer question — *have I taken too many of
+this?* — and the machinery that answers "are these the same photograph" answers
+it badly. On a folder of 8,000 nature photographs, the longest burst in it came
+out as no group at all: fifty-five frames of a bird in flight, and no two of
+them the same photograph.
+
+So a scene is built from two cheap things instead. **One shoot:** photographs
+within ninety minutes of each other, a number taken from your own library —
+the gaps between shots run smoothly with no natural cliff until about ninety
+minutes, where the biggest jump sits and 96% of gaps fall below. **One scene:**
+within a shoot, a photograph joins when it looks like the scene's *average*, not
+like whichever frame sits next to it. That is what lets a sunset stay whole
+while its colour moves, and an eagle stay whole while it turns its head — and
+what stops a scene wandering off into unrelated photographs one step at a
+time.
+
 ## Changed your mind?
 
 **Drag the job's folder out of `Culled Photos` and drop it on
@@ -187,19 +165,6 @@ Either way it puts back everything that job moved, exactly where it came from,
 using the job's own log. Nothing is overwritten; anything that can't go back is
 reported. Run it with a wrong name and it lists the jobs that can be undone.
 
-## Checking where the line belongs
-
-    ./crull "/path/to/photos" --hunt
-
-Changes nothing, moves nothing. The same blind page as `--audit`, asking a
-wider question: instead of only the culls, it draws pairs from across the whole
-score range — confident culls, confident keeps, and everything between — so
-your answers map out where your eye and the tool disagree.
-
-It reports two rates, because there are two ways to be wrong: photographs it
-would have lost, and duplicates it would have left behind. Every pair is
-written to `Records/audit <timestamp>.csv` with what you said.
-
 ## Anything else
 
     ./crull --dashboard     refresh PhotoCruller.html
@@ -211,7 +176,7 @@ measurement:
     ./crull "/folder" --block 32 --ratio 21.9    judge at exactly this limit
     ./crull "/folder" --no-prompt                report and stop, never ask
 
-`--block` is the same 0-100 difference you would pick from the settings list,
+`--block` is round one's difference limit, 0-100,
 given directly, so a plan can be reproduced later without anyone answering
 anything. `--ratio` is the texture-relative limit that normally moves with it;
 set both or neither. Neither moves a file on its own — `--apply` still does
@@ -232,7 +197,7 @@ anything misbehaves, say what it printed.)
 
 Drag a photo folder onto `PhotoCruller.app` (built by `./mac_install.command`) and a Terminal
 window opens sized to the tool, cleared, and runs the cull there — progress
-bars, the settings, and the review page before anything moves.
+bars, both rounds, and the review page before anything moves.
 
 **Dropping several folders at once** is fine: they queue and run one at a time
 in a single window. Drop more while it's running and they join the end.
@@ -261,42 +226,50 @@ reach it immediately; only a change to the drop-handling inside
     ● 2020.01 - NYC
       reading photos    [############--------------------]  38%  1,900/5,000   1m20s left
       comparing photos  [################################] 100%  145/145      2m04s
-      21 copies · 118 MB · the same picture in more than one file
-             8  crop
-             7  resave
-             5  smaller
-             1  rotated
-      [a]pply  ·  [l]ook first  ·  [s]kip  ·  [q]uit
+
+      ROUND ONE · copies
+      21 files here came from another file that is also here · 118 MB
+             8  crop        a crop of the frame being kept
+             7  resave      the same picture, more heavily compressed
+             5  smaller     the same picture at a lower resolution
+             1  rotated     a quarter turn of it, with the orientation flag reset
+
+      each one is provable, and named. nothing else is touched.
+      [r]eview them  ·  [a]pply  ·  [s]kip  ·  [q]uit
       > a
       21 copies moved · 118 MB
-      working out options   4s
-      1    10 groups    20 photographs
-      2    44 groups    94 photographs
-      3    89 groups   209 photographs
-      [1-3] review  ·  [q]uit
-      > 2
+
+      ROUND TWO · scenes
+      grouping by scene [################################] 100%
+      44 scenes · 209 photographs · the biggest holds 31
+      nothing is chosen for you here. keep what you want from each;
+      a scene you do not review is left alone.
+
       review open in your browser — http://127.0.0.1:52118/index.html
-      you changed 6 verdict(s)
-      done · 44 moved · 0.9 GB · Photo Bin holds 12.4 GB
+      12 scenes unreviewed · left whole
+      done · 71 moved · 0.9 GB · Photo Bin holds 12.4 GB
 
-The options come first; the review page opens once you pick one. The choice of
-setting is a single keypress — no Enter — and everything after that happens in
-the page. Quit it and nothing moves; you are back at the settings, free to look
-at another one.
+Round one is a single keypress — no Enter. Round two opens a page in your
+browser, biggest scene first, and everything after that happens there. Quit it
+and nothing moves.
 
-**Nothing closes on its own.** A folder with no duplicates in it still waits
-for `q`, so a run can never flash past before you have read what it found.
-Dropped onto the app, the window closes once you have quit every folder in the
-queue.
+**Nothing closes on its own.** A folder with nothing in it still waits for `q`,
+so a run can never flash past before you have read what it found. Dropped onto
+the app, the window closes once you have quit every folder in the queue.
 `--verbose` restores the full diagnostics when something needs debugging.
 
 ## If something looks wrong
 
-Any pair where the wrong photograph is being culled can be answered on the
-spot — *Wrong way round* to keep the other frame, or *Do not cull this* to keep
-both. If a whole setting is culling too freely, quit back to the settings and
-take a lower one: the list covers every distinct outcome the dial can produce,
-and a lower setting excludes that pair and everything like it.
+**In round one**, a copy you disagree with can be answered on the spot: click
+the frame you would rather keep, or keep both and the pair is left alone.
+
+**In round two** there is nothing to disagree with — the tool has chosen
+nothing. If a scene has gathered badly, keep everything in it with **keep all**
+and it is left whole, or simply skip it: an unreviewed scene loses nothing.
+
+Scenes that gather badly are worth telling me about. Too loose and unrelated
+photographs arrive together; too tight and one burst becomes four. There is no
+measurement for either — only looking at them.
 
 Nothing is at stake in getting it wrong the first time. `--undo` reverses an
 applied job completely — files, sidecars and videos alike.
@@ -317,27 +290,16 @@ Worth doing after the tool changes how it decides, or any time you want to be
 sure a run's answer came from the photographs rather than from something
 remembered.
 
-## Finding out how often it is wrong
+## How often is it wrong?
 
-    ./crull "/some/folder" --audit
+**Round one** can be checked exactly, because its claim is either true or false:
+this file came from that one. It has been. Across ten folders, all 279 of its
+culls were either verified without the tool's help — every `identical` decoded
+and compared pixel by pixel, every `smaller` checked by shrinking the keeper —
+or looked at by eye. None was wrong.
 
-Draws thirty culls at random from what the run would move and shows them in the
-same page, with the answers covered: no labels, no filenames, and the side each
-frame lands on decided by a coin. For each pair you say **the same photograph**
-or **different photographs**; different means the cull was wrong.
-
-Press *Done* and it reports how many were wrong and the range the true rate
-lies in.
-
-**Why a separate exercise.** Reviewing a whole plan tells you what that folder
-needs, but not how often the tool is wrong — by the end you have seen which
-frame it chose every time, and cannot unsee it.
-
-**Why at random.** The review shows the biggest differences first, so working
-through more of it tells you about the pairs the tool already thinks are
-marginal, not about the rest. Only an even draw from the whole plan answers "of
-the photographs this would move, how many should not be". Thirty gives a range
-about ten points wide, a hundred about six.
+**Round two** has no error rate, because it decides nothing. Its mistake is a
+scene gathered badly, and the only test for that is opening one.
 
 ## What it will not do
 
