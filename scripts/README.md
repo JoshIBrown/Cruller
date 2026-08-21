@@ -10,6 +10,7 @@ measurements behind them, and what was tried and rejected — see
 | | |
 |---|---|
 | `cull.py` | The command: the two rounds, applying, undoing, reset |
+| `archive.py` | A finished job's reviews, rebuilt from its records on demand |
 | `review.py` | The review page: one group at a time, scrubbed frame by frame; also the blind audit |
 | `sift.py` | The engine: reads a folder, finds candidates, groups them, ranks each group, writes the plan |
 | `verify.py` | One question answered well — are these two frames the same photograph? Alignment and the residual |

@@ -4,11 +4,10 @@
 #
 #   ./crull "/path/to/folder"           analyse and review; changes nothing on its own
 #   ./crull "/path/to/folder" --apply   move the redundant files out
+#   ./crull "<a folder of culls>"       look through that job's reviews again
 #   ./crull --undo "<job name>"         put everything a job moved back
 #   ./crull --reset                     undo every job, clear every cache
 #   ./crull --dashboard                 refresh the one-page summary
-#   ./crull "/path/to/folder" --audit   judge 30 culls at random for an error rate
-#   ./crull "/path/to/folder" --hunt    the same, across the whole score range
 #   ./crull --queue                     work through folders dropped on PhotoCruller.app
 #
 # Everything lands in the working folder (scripts/settings.conf), never in the

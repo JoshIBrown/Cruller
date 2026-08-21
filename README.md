@@ -9,6 +9,7 @@ with a log, and one command puts it all back.
 ```bash
 ./crull "/path/to/some/photos"          # the two rounds, with review
 ./crull "/path/to/some/photos" --apply  # take the plan as it stands
+./crull "<a folder of culls>"           # look through that job's reviews again
 ./crull --undo "<job name>"             # put a job back
 ./crull --reset                         # undo everything, clear every cache
 ```

@@ -30,6 +30,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from loaders import open_image
 import derived
+import archive
 import review
 import scenes
 import scenes.reading
@@ -90,6 +91,12 @@ def undo_from_drop(folder, no_prompt=False):
 
     Culling asks before it moves anything and so must this: a drop is one
     gesture, easy to make by accident, and it moves photographs.
+
+    Dropping a finished job means "let me look at that again", and for a long
+    time the only thing on offer was putting all of it back — sixty
+    photographs restored because one was the wrong call. So the reviews are
+    what a drop opens now, both rounds as they were decided, and undoing the
+    whole job is still there underneath for when that is what is wanted.
     """
     job, state = job_for_folder(folder)
     if job is None:
@@ -129,35 +136,31 @@ def undo_from_drop(folder, no_prompt=False):
     print(f"  a finished job \u00b7 {len(rows):,} "
           f"file{'' if len(rows)==1 else 's'} ({size_text(gb * 1e9)})")
     if no_prompt:
-        print("  --no-prompt: not undone. Use --undo.")
+        print("  --no-prompt: nothing done. Use --undo, or drop it again.")
         return True
-    print(f"  put {len(rows):,} file{'' if len(rows)==1 else 's'} back?  [y/n] ",
-          end="", flush=True)
+    rounds = archive.rounds_of(DEFAULT_RECORDS, job) if DEFAULT_RECORDS else []
+    if rounds:
+        print(f"  [r]eview {'both rounds' if len(rounds) > 1 else 'it'} again "
+              f"\u00b7 [u]ndo all {len(rows):,} \u00b7 [q]uit")
+        want = ("r", "u", "q")
+    else:
+        print(f"  no reviews were kept \u00b7 [u]ndo all {len(rows):,} "
+              f"\u00b7 [q]uit")
+        want = ("u", "q")
     answer = ""
-    while answer not in ("y", "n"):
+    while answer not in want:
         try:
             answer = read_key()
         except (EOFError, KeyboardInterrupt):
-            answer = "n"
-    print(answer)
-    if answer != "y":
+            answer = "q"
+    print(f"  > {answer}")
+    if answer == "r":
+        revisit(folder)
+    elif answer == "u":
+        undo(job)
+    else:
         print("  left alone.")
-        return True
-    undo(job)
     return True
-
-
-# How far one "be pickier" or "cull more" step moves the limit. Big enough to
-# change the answer, small enough that a couple of steps do not fly past the
-# setting you wanted.
-# The range runs 0 to 100 and always means the same thing. At 0 nothing is
-# culled for merely looking alike — only what is provably a copy, which no
-# setting can spare. At 100 every pair that can be aligned at all is a
-# duplicate. Past about 41 the score stops sorting what a reviewer can tell apart
-# from what he cannot, so up there the choice is taste.
-# More than nine and choosing one takes two keypresses, which the menu would
-# act on after the first.
-MAX_OPTIONS = 5
 
 
 
@@ -473,6 +476,7 @@ def copies_first(folder, opts, session, job, a):
         return False
     if key == "s":
         return True
+    answers = {}
     if key == "r":
         action, answers = review.ask_groups(
             groups, opts["reviewdir"], f"{job} \u2014 {n:,} copies",
@@ -536,6 +540,180 @@ def record_review(job, groups, answers, action, setting, proposed=True):
                             else round(photo["difference"], 1),
                             (said.get("reason") or "").strip()])
     return path
+
+
+def is_culled_folder(folder):
+    """True when this folder holds what one of the tool's own jobs moved out.
+
+    Dropped on the app, such a folder means "let me look at that run again"
+    rather than "cull this" — culling a folder of culls would be absurd. It is
+    recognised by having a job's records behind it, not by its contents, so an
+    ordinary folder of photographs is never mistaken for one.
+    """
+    if not DEFAULT_CULL or not DEFAULT_RECORDS:
+        return False
+    folder = os.path.abspath(folder).rstrip(os.sep)
+    if os.path.dirname(folder) != os.path.abspath(DEFAULT_CULL):
+        return False
+    return bool(archive.rounds_of(DEFAULT_RECORDS, os.path.basename(folder)))
+
+
+def _kin(log_rows, moved_to):
+    """The sidecars that travelled with a photograph when it was culled.
+
+    A Live Photo's video and an edit's sidecar are moved beside the picture
+    they belong to and share its name. Putting the picture back without them
+    would leave the motion in the culled folder and the still without it.
+    """
+    stem = os.path.splitext(moved_to)[0]
+    return [r for r in log_rows
+            if r["to"] != moved_to and os.path.splitext(r["to"])[0] == stem]
+
+
+def _carry_out(job, folder, changes):
+    """Do what somebody changed their mind about. Returns what actually moved.
+
+    Two directions, one shape: a photograph comes back to where it started, or
+    a photograph that was kept goes out to join the others. Both are recorded
+    in the same log the whole job is undone from, so a change of mind is itself
+    undoable and nothing here is a one-way door.
+    """
+    log = os.path.join(DEFAULT_RECORDS, f"{job} - log.csv")
+    rows = []
+    if os.path.exists(log):
+        rows = list(csv.DictReader(open(log, errors="replace")))
+    dest_dir = os.path.join(DEFAULT_CULL, job)
+    now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    back, out, failed = [], [], 0
+
+    for c in changes:
+        src, home = c.get("from"), c.get("to")
+        try:
+            if c.get("restore"):
+                # Back where it came from, with anything that travelled with it.
+                for r in [{"to": src, "from": home}] + _kin(rows, src):
+                    if not os.path.exists(r["to"]):
+                        continue
+                    os.makedirs(os.path.dirname(r["from"]), exist_ok=True)
+                    shutil.move(r["to"], r["from"])
+                    rows = [q for q in rows if q["to"] != r["to"]]
+                back.append(c["file"])
+            else:
+                # Out to the culled folder, logged like any other cull.
+                if not os.path.exists(src):
+                    continue
+                rel = os.path.relpath(src, folder) if folder else \
+                      os.path.basename(src)
+                dst = os.path.join(dest_dir, rel)
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                base, ext = os.path.splitext(dst)
+                k = 2
+                while os.path.exists(dst):
+                    dst = f"{base} ({k}){ext}"
+                    k += 1
+                mb = round(os.path.getsize(src) / 1e6, 1)
+                shutil.move(src, dst)
+                rows.append({"moved_at": now, "from": src, "to": dst,
+                             "why": "changed my mind", "kept_instead": "",
+                             "MB": mb})
+                out.append((c["file"], dst))
+        except Exception as e:
+            failed += 1
+            print(f"  failed: {c.get('file')} \u2014 {str(e)[:60]}")
+
+    if back or out:
+        with open(log, "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(["moved_at", "from", "to", "why", "kept_instead", "MB"])
+            for r in rows:
+                w.writerow([r.get("moved_at", now), r["from"], r["to"],
+                            r.get("why", ""), r.get("kept_instead", ""),
+                            r.get("MB", "")])
+    return back, dict(out), failed
+
+
+def revisit(folder):
+    """Open a finished job's reviews again and act on any decision changed.
+
+    Undoing the whole job was the only way back from a single wrong call. This
+    is the finer instrument: both rounds as they were decided, every group
+    still assembled, and one photograph movable without disturbing the rest.
+    """
+    folder = os.path.abspath(folder)
+    job = os.path.basename(folder.rstrip(os.sep))
+    source = None
+    src_file = os.path.join(DEFAULT_RECORDS, f"{job} - source.txt")
+    if os.path.exists(src_file):
+        source = open(src_file).read().strip().splitlines()[0].strip()
+
+    rounds = archive.rounds_of(DEFAULT_RECORDS, job)
+    if not rounds:
+        print("  no reviews were kept for this job.")
+        return
+    if not source:
+        print("  the folder this came from is not recorded \u2014 cannot "
+              "put anything back.")
+        return
+    print(f"\n  {job}")
+    print(f"  {len(rounds)} round{'' if len(rounds) == 1 else 's'} to look "
+          f"through again \u00b7 anything you change is carried out")
+
+    for setting in rounds:
+        what = archive.NAMES[setting]
+        state = archive.groups_of(DEFAULT_RECORDS, job, setting, source)
+        if not state:
+            print(f"\n  {what} \u00b7 nothing left to show")
+            continue
+        n = sum(len(g["photos"]) for g in state)
+        print(f"\n  {what} \u00b7 {len(state)} group"
+              f"{'' if len(state) == 1 else 's'} \u00b7 {n} photographs")
+        page = archive.render(DEFAULT_REVIEWS, job, setting, state, progress)
+        if not page:
+            print("  none of them can be read any more")
+            continue
+        action, answer = review._serve(DEFAULT_REVIEWS,
+                                       os.path.basename(page))
+        changes = (answer or {}).get("changes") or []
+        if action != "revise" or not changes:
+            print("  nothing changed")
+            continue
+
+        back, out, failed = _carry_out(job, source, changes)
+        record_revision(job, setting, back, out)
+        refresh_dashboard()
+        said = []
+        if back:
+            said.append(f"{len(back)} put back")
+        if out:
+            said.append(f"{len(out)} moved out")
+        if failed:
+            said.append(f"{failed} failed")
+        print("  " + " \u00b7 ".join(said))
+
+
+def record_revision(job, setting, back, out):
+    """Write a changed mind into the same record the review went into.
+
+    A cull put back weeks later is the most valuable row in the ledger: it is
+    the tool being wrong, found by the only instrument that can find it. It
+    would be lost entirely if changing a decision only moved a file.
+    """
+    if not DEFAULT_RECORDS:
+        return
+    path = os.path.join(DEFAULT_RECORDS, f"{job} - review.csv")
+    fresh = not os.path.exists(path)
+    stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with open(path, "a", newline="") as fh:
+        w = csv.writer(fh)
+        if fresh:
+            w.writerow(["judged_at", "setting", "action", "group", "file",
+                        "planned", "you_said", "why", "difference", "reason"])
+        for name in back:
+            w.writerow([stamp, setting, "revise", "", name, "cull", "keep",
+                        "", "", "put back on a second look"])
+        for name in out:
+            w.writerow([stamp, setting, "revise", "", name, "keep", "cull",
+                        "", "", "sent out on a second look"])
 
 
 def job_name(folder, source=None):
@@ -648,6 +826,12 @@ def move_out(folder, leaving, dest_root, thumbs_dir, job):
     `leaving` is a list of what goes, each carrying its file, the reason, and
     what is kept in its place. Nothing else is read — no plan, no verdicts —
     so a round that never proposed anything can still say what it is moving.
+
+    The log is added to, never rewritten. Both rounds move files out of the
+    same folder under the same job, and a log opened for writing the second
+    time forgets the first: the photographs sit in the culled folder with
+    nothing left saying where they came from, and an undo silently leaves them
+    there. It is the only record of what happened, so it only ever grows.
     """
     rows = leaving
     dest = os.path.join(dest_root, job)
@@ -657,9 +841,11 @@ def move_out(folder, leaving, dest_root, thumbs_dir, job):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     moved = missing = failed = 0
     freed = 0
-    with open(log, "w", newline="") as fh:
+    fresh = not os.path.exists(log) or os.path.getsize(log) == 0
+    with open(log, "a", newline="") as fh:
         w = csv.writer(fh)
-        w.writerow(["moved_at", "from", "to", "why", "kept_instead", "MB"])
+        if fresh:
+            w.writerow(["moved_at", "from", "to", "why", "kept_instead", "MB"])
         for n, r in enumerate(rows, 1):
             progress(n, len(rows), "moving files")
             src = os.path.join(folder, r["file"])
@@ -1257,8 +1443,10 @@ def main():
         print(f"  done \u00b7 {moved:,} moved \u00b7 {size_text(freed)} \u00b7 "
               f"{os.path.basename(WORKING_DIR)} holds "
               f"{reclaimed_total():.1f} GB{extra}")
-        print(f'  to change your mind: --undo "{job}", or drop '
-              f'that folder from Culled Photos on the app')
+        print(f'  to change your mind: drop that folder from Culled Photos '
+              f'on the app \u2014 both rounds open again with what you')
+        print(f'  decided, and anything you change there is carried out. '
+              f'\u2014undo "{job}" still puts everything back.')
     else:
         print(f'  review, then: {apply_hint}')
 

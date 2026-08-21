@@ -154,16 +154,30 @@ and how many files it holds, and asks before putting anything back:
       put 1,204 files back?  [y/n]
 
 Dropping a folder from *inside* one of those jobs works too — it finds the job
-it belongs to. One keypress answers it, and only `y` or `n` count — anything
-else is ignored rather than taken as an answer.
+it belongs to.
+
+It offers two things. **Review it again** rebuilds both rounds exactly as you
+decided them: every group still assembled, every photograph marked with where
+it actually is now. Change your mind about any one of them — tick a photograph
+that went, untick one that stayed — and pressing the button moves that file and
+nothing else. A change of mind is itself logged, so it can be undone tomorrow
+like anything else.
+
+**Undo the job** is the blunt instrument, still there: it puts back everything
+that job moved, exactly where it came from, using the job's own log. Nothing is
+overwritten; anything that can't go back is reported.
 
 By name, if you prefer typing:
 
     ./crull --undo "<job name>"
 
-Either way it puts back everything that job moved, exactly where it came from,
-using the job's own log. Nothing is overwritten; anything that can't go back is
-reported. Run it with a wrong name and it lists the jobs that can be undone.
+Run it with a wrong name and it lists the jobs that can be undone.
+
+Nothing is stored to make the review reopen. The pages are built when you ask
+for them, out of the review and the log the job already keeps, so what they
+show is the folder as it is rather than a third account of it that is free to
+go stale. Each job keeps its own, so any number of finished folders can be
+looked through again.
 
 ## Anything else
 
@@ -212,8 +226,9 @@ dropped that isn't a photo is skipped with a note.
 **Dropping when nothing is running always starts fresh.** Tickets left behind
 by an interrupted session are discarded; only what you just dropped runs.
 
-**Dropping a folder from the working folder means undo**, never cull — see
-"Changed your mind?" above. The tool will not cull its own output.
+**Dropping a folder from the working folder means looking at it again**, never
+culling — see "Changed your mind?" above. The tool will not cull its own
+output.
 
 **Rebuilds are rarely needed.** The app runs the live scripts, so code changes
 reach it immediately; only a change to the drop-handling inside

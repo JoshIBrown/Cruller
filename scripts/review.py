@@ -166,11 +166,13 @@ def _patch(path, fx, fy):
                     min(im.height, y + DETAIL_HALF))), im.width
 
 
-def _serve(out_dir):
-    """Open the page written in `out_dir` and wait for it to answer.
+def _serve(out_dir, page="index.html"):
+    """Open a page written in `out_dir` and wait for it to answer.
 
     Local only, serving that one folder, and gone the moment the page
-    replies.
+    replies. `page` is which file to open — a fresh review is always
+    `index.html`, and a record kept beside the photographs is opened by its
+    own name so the folder can hold both rounds at once.
     """
     answer = {}
     ready = threading.Event()
@@ -197,7 +199,7 @@ def _serve(out_dir):
         port = probe.getsockname()[1]
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    url = f"http://127.0.0.1:{port}/index.html"
+    url = f"http://127.0.0.1:{port}/{page}"
     print(f"  review open in your browser — {url}")
     webbrowser.open(url)
     try:
@@ -460,10 +462,10 @@ GROUP = """
 </section>"""
 
 
-PAGE = """<meta charset="utf-8"><meta name="viewport"
- content="width=device-width,initial-scale=1"><title>%(title)s</title>
-<style>
- :root { color-scheme: dark }
+# One stylesheet, used by the live review and by the record kept beside
+# the photographs afterwards. They are the same page looked at twice —
+# once to decide and once to remember — so they must not drift apart.
+STYLE = """ :root { color-scheme: dark }
  body { background:#16161a; color:#e8e8ea; margin:0;
         font:15px/1.5 -apple-system,BlinkMacSystemFont,sans-serif }
  header { position:sticky; top:0; background:#16161aee; backdrop-filter:blur(6px);
@@ -525,7 +527,13 @@ PAGE = """<meta charset="utf-8"><meta name="viewport"
  #done { padding:60px 20px; font-size:16px; display:none }
  @media (max-width:760px) { .pane { grid-template-columns:1fr }
                             .rail { height:auto; grid-template-columns:repeat(4,1fr) } }
-</style>
+"""
+
+
+PAGE = """<meta charset="utf-8"><meta name="viewport"
+ content="width=device-width,initial-scale=1"><title>%(title)s</title>
+<style>
+%(style)s</style>
 <header><h1>%(title)s</h1><div class="sub">%(subtitle)s</div></header>
 <main id="list">%(blocks)s</main>
 <footer>
@@ -695,7 +703,7 @@ def _group_page(groups, thumbs, title, subtitle, where="img", proposed=True):
                          for p in g["photos"] if thumbs.get(p["path"])]
                         for g in groups])
     return PAGE % dict(title=html.escape(title), subtitle=html.escape(subtitle),
-                       blocks="".join(blocks), state=state,
+                       style=STYLE, blocks="".join(blocks), state=state,
                        proposed="true" if proposed else "false",
                        apply="Apply" if proposed
                              else "Move what I did not keep")
