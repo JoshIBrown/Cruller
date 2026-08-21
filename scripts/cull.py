@@ -125,42 +125,55 @@ def undo_from_drop(folder, no_prompt=False):
         return True
 
     log = os.path.join(DEFAULT_RECORDS, f"{job} - log.csv")
-    rows = list(csv.DictReader(open(log, errors="replace")))
-    gb = 0.0
-    for r in rows:
-        try:
-            gb += float(r.get("MB") or 0) / 1024
-        except ValueError:
-            pass
     print(f"● {job}")
-    print(f"  a finished job \u00b7 {len(rows):,} "
-          f"file{'' if len(rows)==1 else 's'} ({size_text(gb * 1e9)})")
     if no_prompt:
         print("  --no-prompt: nothing done. Use --undo, or drop it again.")
         return True
-    rounds = archive.rounds_of(DEFAULT_RECORDS, job) if DEFAULT_RECORDS else []
-    if rounds:
-        print(f"  [r]eview {'both rounds' if len(rounds) > 1 else 'it'} again "
-              f"\u00b7 [u]ndo all {len(rows):,} \u00b7 [q]uit")
-        want = ("r", "u", "q")
-    else:
-        print(f"  no reviews were kept \u00b7 [u]ndo all {len(rows):,} "
-              f"\u00b7 [q]uit")
-        want = ("u", "q")
-    answer = ""
-    while answer not in want:
-        try:
-            answer = read_key()
-        except (EOFError, KeyboardInterrupt):
-            answer = "q"
-    print(f"  > {answer}")
-    if answer == "r":
-        revisit(folder)
-    elif answer == "u":
-        undo(job)
-    else:
-        print("  left alone.")
-    return True
+
+    # The menu comes back after every pass. Changing one decision usually
+    # prompts another — a photograph put back makes the frame beside it look
+    # different — and a tool that quits after the first one makes that a fresh
+    # drag through Finder every time.
+    while True:
+        rows = list(csv.DictReader(open(log, errors="replace"))) \
+            if os.path.exists(log) else []
+        gb = 0.0
+        for r in rows:
+            try:
+                gb += float(r.get("MB") or 0) / 1024
+            except ValueError:
+                pass
+        if not rows:
+            print("  nothing of this job is still moved out.")
+            return True
+        print(f"  {len(rows):,} file{'' if len(rows) == 1 else 's'} moved out "
+              f"({size_text(gb * 1e9)})")
+        rounds = archive.rounds_of(DEFAULT_RECORDS, job) if DEFAULT_RECORDS \
+            else []
+        if rounds:
+            print(f"  [r]eview {'both rounds' if len(rounds) > 1 else 'it'} "
+                  f"again \u00b7 [u]ndo all {len(rows):,} \u00b7 [q]uit")
+            want = ("r", "u", "q")
+        else:
+            print(f"  no reviews were kept \u00b7 [u]ndo all {len(rows):,} "
+                  f"\u00b7 [q]uit")
+            want = ("u", "q")
+        answer = ""
+        while answer not in want:
+            try:
+                answer = read_key()
+            except (EOFError, KeyboardInterrupt):
+                answer = "q"
+        print(f"  > {answer}")
+        if answer == "r":
+            revisit(folder)
+            print()
+        elif answer == "u":
+            undo(job)
+            return True
+        else:
+            print("  left alone.")
+            return True
 
 
 
@@ -528,7 +541,12 @@ def record_review(job, groups, answers, action, setting, proposed=True):
         for gi, g in enumerate(groups):
             said = answers.get(str(gi)) or {}
             keep = set(said.get("keep") or [])
-            answered = "keep" in said
+            # Whether the group was judged at all — the same question the move
+            # asks, answered from the same key, so the record cannot claim a
+            # decision that moved nothing. The page sends a `keep` list for
+            # every group including ones nobody opened, so its presence proves
+            # nothing; only the flag the page sets on being touched does.
+            answered = bool(said.get(review.REVIEWED))
             for photo in g["photos"]:
                 w.writerow([stamp, setting, action, g["id"], photo["file"],
                             ("keep" if photo["keep"] else "cull")

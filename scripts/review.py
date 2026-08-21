@@ -450,15 +450,24 @@ GROUP = """
     <button type="button" class="all" onclick="all(%(gi)d,false)">keep none</button>
   </div>
   <div class="pane">
-    <div class="stage" id="s%(gi)d">%(frames)s<div class="tag" id="g%(gi)d"></div></div>
+    <div class="col">
+      <div class="stage" id="s%(gi)d" ondblclick="flip(%(gi)d)">%(frames)s<div
+        class="tag" id="g%(gi)d"></div><div class="count" id="c%(gi)d"></div>
+        <button type="button" class="nav prev" title="previous (left arrow)"
+                onclick="step(%(gi)d,-1)">&lsaquo;</button>
+        <button type="button" class="nav next" title="next (right arrow)"
+                onclick="step(%(gi)d,1)">&rsaquo;</button>
+      </div>
+      <div class="foot">
+        <label class="choose big" id="b%(gi)d"><input type="checkbox" id="k%(gi)d"
+          onchange="setkeep(%(gi)d, this.checked)"> keep this one</label>
+        <span id="f%(gi)d"></span>
+      </div>
+      <input class="note" id="r%(gi)d" placeholder="anything worth noting? (optional)"
+             oninput="note(%(gi)d)">
+    </div>
     <div class="rail">%(rail)s</div>
   </div>
-  <div class="foot">
-    <label class="choose"><input type="checkbox" id="k%(gi)d"
-      onchange="setkeep(%(gi)d, this.checked)"> keep this one</label>
-    <span id="f%(gi)d"></span>
-    <input class="note" id="r%(gi)d" placeholder="anything worth noting? (optional)"
-           oninput="note(%(gi)d)"></div>
 </section>"""
 
 
@@ -480,37 +489,62 @@ STYLE = """ :root { color-scheme: dark }
  /* A group nobody has looked at reads as unfinished business: the state is
     dimmed and italic, and a mark runs down the left edge so the eye can find
     what is still waiting while scrolling past forty of them. */
+ .group.changed { border-left:4px solid #d9a441; padding-left:16px }
+ .group.changed .head { background:#33290f }
+ .tag.turn { color:#e9c46a }
  .group.unreviewed .state { color:#7b7b84; font-style:italic }
  .group.unreviewed { border-left:3px solid #3a3a44; padding-left:17px }
  .group:not(.unreviewed) { border-left:3px solid #2f6b4f; padding-left:17px }
  .all { background:#26262e; color:#c9c9d1; border:1px solid #37373f;
         border-radius:5px; padding:3px 9px; font-size:12px; cursor:pointer }
  .all:hover { background:#31313b; border-color:#4a4a54 }
- .pane { display:grid; grid-template-columns:1fr 200px; gap:10px }
+ .pane { display:grid; grid-template-columns:1fr 168px; gap:12px }
+ .col { min-width:0 }
  /* One frame large: a thumbnail is enough to recognise a picture and not
     enough to agree to losing it. */
  .stage { position:relative; height:64vh; background:#0e0e11; border-radius:6px;
           overflow:hidden; outline:3px solid transparent; outline-offset:-3px }
- .stage img { position:absolute; inset:0; margin:auto; max-width:100%%;
-              max-height:100%%; display:none }
+ .stage img { position:absolute; inset:0; margin:auto; max-width:100%;
+              max-height:100%; display:none }
  .stage img.on { display:block }
- .stage.keep { outline-color:#3d8a4b } .stage.cull { outline-color:#7a3b3b }
+ .stage { outline-width:5px }
+ .stage.keep { outline-color:#4caf50 } .stage.cull { outline-color:#e05a4e }
+ .pip { outline-width:3px }
+ .pip.keep { outline-color:#4caf50 } .pip.cull { outline-color:#e05a4e }
+ .pip.here img { box-shadow:inset 0 0 0 99px #ffffff14 }
+ /* Stepping through a group is the common act, so it gets the whole edge of
+    the picture rather than a control to aim at. */
+ .nav { position:absolute; top:0; bottom:0; width:16%; border:0; cursor:pointer;
+        background:none; color:#fff; font-size:34px; line-height:1; opacity:0;
+        transition:opacity .12s; text-shadow:0 0 8px #000 }
+ .stage:hover .nav { opacity:.55 }
+ .nav:hover { opacity:1 !important; background:#0006 }
+ .nav.prev { left:0 } .nav.next { right:0 }
+ .count { position:absolute; right:10px; top:10px; padding:3px 9px;
+          border-radius:4px; font-size:12px; background:#000a; color:#c9c9d1 }
  .tag { position:absolute; left:10px; top:10px; padding:3px 9px; border-radius:4px;
         font-size:12px; background:#000a }
  /* The rail carries the whole group: what stays, what goes, at a glance. */
- .rail { display:grid; grid-template-columns:1fr 1fr; gap:6px; height:64vh;
-         overflow-y:auto; align-content:start }
+ .rail { display:grid; grid-template-columns:1fr 1fr; gap:5px; height:64vh;
+         overflow-y:auto; align-content:start; padding-right:2px }
  .pip { position:relative; padding:0; border:0; background:none; cursor:pointer;
         border-radius:4px; overflow:hidden; outline:2px solid transparent;
         outline-offset:-2px }
- .pip img { width:100%%; aspect-ratio:1; object-fit:cover; display:block }
+ /* Whole picture, never a crop of it: a thumbnail cropped square hides the
+    very thing being judged — how the frame is composed. */
+ .pip img { width:100%; aspect-ratio:1; object-fit:contain; display:block;
+            background:#0e0e11 }
  .pip span { position:absolute; inset:auto 0 0 0; height:5px; background:#7a3b3b }
  .pip.keep span { background:#3d8a4b }
  .pip.here { outline-color:#e8e8ea }
  .pip.chosen img { box-shadow:inset 0 0 0 2px #e8e8ea }
  .pip.cull img { opacity:.45 }
- .foot { display:flex; gap:12px; align-items:center; margin-top:10px;
+ .foot { display:flex; gap:12px; align-items:center; margin-top:8px;
          color:#8a8a93; font-size:12px }
+ .choose.big { background:#26262e; border:1px solid #37373f; border-radius:6px;
+               padding:7px 12px; font-size:14px }
+ .choose.big.on { background:#24401f; border-color:#4caf50 }
+ .note { margin-top:8px }
  .choose { display:flex; gap:6px; align-items:center; color:#e8e8ea;
            font-size:13px; white-space:nowrap; cursor:pointer }
  .note { background:#1d1d23; color:#e8e8ea; border:1px solid #33333b;
@@ -537,21 +571,33 @@ PAGE = """<meta charset="utf-8"><meta name="viewport"
 <header><h1>%(title)s</h1><div class="sub">%(subtitle)s</div></header>
 <main id="list">%(blocks)s</main>
 <footer>
-  <button class="go" onclick="finish('apply')">%(apply)s</button>
-  <button class="plain" onclick="finish('quit')">Quit &mdash; move nothing</button>
+  <button class="go" id="go" onclick="finish('%(go)s')">%(apply)s</button>
+  <button class="plain" onclick="finish('%(stop)s')">%(quit)s</button>
   <span id="tally"></span>
 </footer>
 <div id="done"></div>
 <script>
 const G = %(state)s;
-const AT = G.map(g => { const i = g.findIndex(p => !p.keep); return i < 0 ? 0 : i; });
+// Open on a frame being kept. The one going is the argument; the one staying
+// is what the argument is for, and it is what somebody arriving needs to see.
+const AT = G.map(g => { const i = g.findIndex(p => p.keep); return i < 0 ? 0 : i; });
 const NOTE = {};
 const KEPT = {"not the raw":"this is the raw", "fewer pixels":"more pixels",
   "less metadata":"keeps more of its metadata", "more compressed":"compressed less",
   "less sharp":"sharper", "smaller file":"the larger file",
   "an edit":"untouched by an editor"};
-// Choosing what to look at and deciding its fate are separate acts.
+// Choosing what to look at and deciding its fate are separate acts: a single
+// click only moves the eye. Deciding takes a deliberate gesture — the box, the
+// space bar, or a double-click on the picture itself.
 function pick(gi, i) { AT[gi] = i; paint(gi); }
+function step(gi, d) {
+  const n = G[gi].length;
+  pick(gi, (AT[gi] + d + n) %% n);         // wraps: a group is a loop, not a list
+}
+function flip(gi, i) {
+  if (i !== undefined) AT[gi] = i;
+  setkeep(gi, !G[gi][AT[gi]].keep);
+}
 // Whether this group was decided about at all. An empty set of keepers is an
 // answer — "none of these" — and saying nothing is not, so the two cannot be
 // sent as the same thing. Without this a scene scrolled past arrives looking
@@ -564,6 +610,10 @@ function pick(gi, i) { AT[gi] = i; paint(gi); }
 // means its plan stands. Round two arrives with nothing chosen, so its groups
 // start unreviewed and leaving one alone means exactly nothing.
 const PROPOSED = %(proposed)s;
+// A review being looked at again rather than made. Every photograph already
+// went somewhere, so what this page collects is not a set of verdicts but the
+// few that differ from what was carried out.
+const REVISIT = %(revisit)s;
 const REVIEWED = {};
 if (PROPOSED) G.forEach((_, i) => REVIEWED[i] = true);
 function reviewed(gi) { REVIEWED[gi] = true; }
@@ -583,9 +633,20 @@ function paint(gi) {
   box.classList.toggle('keep', p.keep);
   box.classList.toggle('cull', !p.keep);
   document.getElementById('k' + gi).checked = p.keep;
-  document.getElementById('g' + gi).textContent =
-    !REVIEWED[gi] ? 'unreviewed'
-    : (p.keep ? 'keeping' : 'moving out') + (p.chosen ? " \\u00b7 the tool's pick" : '');
+  if (REVISIT) {
+    // Where it is, and where this page would put it. Saying only the first
+    // reads as a contradiction the moment somebody changes their mind.
+    const turn = p.keep === !p.gone ? ''
+      : (p.gone ? ' \\u2192 putting it back' : ' \\u2192 moving it out');
+    const tag = document.getElementById('g' + gi);
+    tag.textContent = (p.gone ? 'moved out' : 'kept') + turn;
+    tag.className = 'tag' + (turn ? ' turn' : '');
+  } else {
+    document.getElementById('g' + gi).textContent =
+      !REVIEWED[gi] ? 'unreviewed'
+      : (p.keep ? 'keeping' : 'moving out')
+        + (p.chosen ? " \\u00b7 the tool's pick" : '');
+  }
   document.querySelectorAll('[data-g="' + gi + '"] .pip').forEach(el => {
     const n = +el.dataset.i;
     el.classList.toggle('keep', g[n].keep);
@@ -593,6 +654,8 @@ function paint(gi) {
     el.classList.toggle('here', n === i);
     el.classList.toggle('chosen', g[n].chosen);
   });
+  document.getElementById('c' + gi).textContent = (i + 1) + ' / ' + g.length;
+  document.getElementById('b' + gi).classList.toggle('on', p.keep);
   const when = p.when ? new Date(p.when * 1000).toLocaleString() : '';
   const said = why(g, p);
   document.getElementById('f' + gi).textContent =
@@ -600,12 +663,30 @@ function paint(gi) {
     + ' \\u00b7 ' + p.size + ' MB' + (when ? ' \\u00b7 ' + when : '')
     + (said ? ' \\u00b7 ' + said : '');
   const kept = g.filter(x => x.keep).length;
+  const differs = REVISIT && g.some(x => x.keep !== !x.gone);
   document.getElementById('t' + gi).textContent =
     !REVIEWED[gi] ? 'unreviewed' :
-    kept === 0 ? 'keeping none' :
-    kept === g.length ? 'keeping all' : 'keeping ' + kept + ' of ' + g.length;
+    (differs ? 'changed \\u00b7 ' : '') + (
+      kept === 0 ? 'keeping none' :
+      kept === g.length ? 'keeping all' : 'keeping ' + kept + ' of ' + g.length);
   const sec2 = document.querySelector('[data-g="' + gi + '"]');
-  if (sec2) sec2.classList.toggle('unreviewed', !REVIEWED[gi]);
+  if (sec2) {
+    sec2.classList.toggle('unreviewed', !REVIEWED[gi]);
+    sec2.classList.toggle('changed', !!differs);
+  }
+  if (REVISIT) {
+    const c = changes();
+    const back = c.filter(x => x.restore).length;
+    document.getElementById('tally').textContent = c.length
+      ? back + ' to put back \\u00b7 ' + (c.length - back) + ' to move out'
+      : 'nothing changed yet';
+    const go = document.getElementById('go');
+    go.disabled = !c.length;
+    go.textContent = c.length
+      ? 'Carry out ' + c.length + ' change' + (c.length === 1 ? '' : 's')
+      : 'No changes yet';
+    return;
+  }
   let moved = 0, groups = 0, waiting = 0;
   G.forEach((gg, n) => {
     if (!REVIEWED[n]) { waiting++; return; }     // unreviewed moves nothing
@@ -616,21 +697,48 @@ function paint(gi) {
     moved + ' to move, from ' + groups + ' group' + (groups === 1 ? '' : 's')
     + (waiting ? ' \\u00b7 ' + waiting + ' unreviewed' : '');
 }
-// Arrows walk the group under the pointer; space keeps or drops what is shown.
+// Arrows walk the group being looked at; space keeps or drops what is shown.
+// Which group that is: the one under the pointer, else the one filling the
+// middle of the screen. Scrolling to a group is how you choose it, so no
+// separate act of selecting one is needed.
 document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' && e.target.type !== 'checkbox') return;
   const sec = document.querySelector('.group:hover') ||
               [...document.querySelectorAll('.group')].find(s => {
                 const r = s.getBoundingClientRect();
-                return r.top < innerHeight / 2 && r.bottom > innerHeight / 2;
+                return r.bottom > innerHeight / 2;
               });
   if (!sec) return;
-  const gi = +sec.dataset.g, n = +sec.dataset.n;
-  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-    pick(gi, Math.min(n - 1, Math.max(0, AT[gi] + (e.key === 'ArrowRight' ? 1 : -1))));
-    e.preventDefault();
-  } else if (e.key === ' ') { setkeep(gi, !G[gi][AT[gi]].keep); e.preventDefault(); }
+  const gi = +sec.dataset.g;
+  if (e.key === 'ArrowRight') { step(gi, 1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft') { step(gi, -1); e.preventDefault(); }
+  else if (e.key === ' ' || e.key === 'Enter') { flip(gi); e.preventDefault(); }
 });
+// The few photographs whose fate this page would change. One kept and now
+// unwanted goes out; one culled and now wanted comes back. Both are a single
+// move, and both can be undone again tomorrow.
+function changes() {
+  const out = [];
+  G.forEach(g => g.forEach(p => {
+    if (p.keep !== !p.gone)
+      out.push({file: p.file, from: p.now, to: p.was, restore: p.gone});
+  }));
+  return out;
+}
+
 function finish(action) {
+  if (REVISIT) {
+    const c = action === 'revise' ? changes() : [];
+    fetch('/done', {method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: c.length ? 'revise' : 'close',
+                                          changes: c})})
+      .finally(() => said(c.length
+        ? 'Carrying out ' + c.length + ' change'
+          + (c.length === 1 ? '' : 's') + '.'
+        : 'Nothing changed.'));
+    return;
+  }
   const answers = {};
   document.querySelectorAll('.group').forEach(sec => {
     const i = +sec.dataset.g;
@@ -640,21 +748,40 @@ function finish(action) {
   });
   fetch('/done', {method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({action, answers})}).then(() => {
-      document.getElementById('list').style.display = 'none';
-      document.querySelector('header').style.display = 'none';
-      document.querySelector('footer').style.display = 'none';
-      const d = document.getElementById('done');
-      d.style.display = 'block';
-      d.textContent = action === 'apply'
-        ? 'Moving them now. You can close this page.'
-        : 'Nothing moved. What you said is written down either way.';
+      said(action === 'apply' ? 'Moving them now.'
+        : 'Nothing moved. What you said is written down either way.');
     });
+}
+
+// The page has said what it had to say. It tries to shut itself, which a
+// browser allows only for a window it opened; when it will not, the message
+// stands so nobody is left wondering whether the click landed.
+function said(text) {
+  document.getElementById('list').style.display = 'none';
+  document.querySelector('header').style.display = 'none';
+  document.querySelector('footer').style.display = 'none';
+  const d = document.getElementById('done');
+  d.style.display = 'block';
+  d.textContent = text + ' You can close this page \\u2014 the terminal is '
+                       + 'waiting with what to do next.';
+  setTimeout(() => { try { window.close(); } catch (err) {} }, 500);
 }
 G.forEach((_, i) => paint(i));
 </script>"""
 
 
-def _group_page(groups, thumbs, title, subtitle, where="img", proposed=True):
+def _src(where, name):
+    """Where the page finds one picture.
+
+    A live review serves its thumbnails from a folder beside the page. A
+    review reopened later carries them inside it, because the folder it was
+    served from is swept as soon as the run ends.
+    """
+    return name if where is None else "%s/%s" % (where, name)
+
+
+def _group_page(groups, thumbs, title, subtitle, where="img", proposed=True,
+                revisit=False):
     """One section per group: a rail of every frame, and one shown large.
 
     The rail carries the whole group and its state at a glance — what stays,
@@ -678,17 +805,21 @@ def _group_page(groups, thumbs, title, subtitle, where="img", proposed=True):
         photos = [p for p in g["photos"] if thumbs.get(p["path"])]
         if len(photos) < 2:
             continue
-        start_at = next((i for i, p in enumerate(photos) if not p["keep"]), 0)
+        # Open on a frame that is being kept. The one going is the argument;
+        # the one staying is what the argument is for, and it is what somebody
+        # arriving at a group needs to see first.
+        start_at = next((i for i, p in enumerate(photos) if p["keep"]), 0)
         frames, rail = [], []
         for i, p in enumerate(photos):
             on = " class='on'" if i == start_at else ""
-            frames.append('<img src="%s/%s" data-i="%d"%s>'
-                          % (where, thumbs[p["path"]], i, on))
+            frames.append('<img src="%s" data-i="%d"%s>'
+                          % (_src(where, thumbs[p["path"]]), i, on))
             rail.append(
                 '<button type="button" class="pip" data-i="%d" '
-                'onclick="pick(%d,%d)"><img src="%s/%s" loading="lazy">'
-                '<span></span></button>'
-                % (i, gi, i, where, thumbs[p["path"]]))
+                'onclick="pick(%d,%d)" ondblclick="flip(%d,%d)" '
+                'title="double-click to keep or drop"><img src="%s" '
+                'loading="lazy"><span></span></button>'
+                % (i, gi, i, gi, i, _src(where, thumbs[p["path"]])))
         gap = photos[-1]["taken"] - photos[0]["taken"]
         over = ("" if gap <= 0 else " over %.0fs" % gap if gap < 90
                 else " over %.0f min" % (gap / 60))
@@ -696,17 +827,30 @@ def _group_page(groups, thumbs, title, subtitle, where="img", proposed=True):
                                    over=over,
                                    frames="".join(frames), rail="".join(rail)))
 
-    state = json.dumps([[{"file": p["file"], "keep": p["keep"],
-                          "chosen": p["keep"], "why": p["why"],
-                          "because": p["because"], "when": p["taken"],
-                          "dim": p["dimensions"], "size": p["size"]}
-                         for p in g["photos"] if thumbs.get(p["path"])]
-                        for g in groups])
+    def _state(p):
+        out = {"file": p["file"], "keep": p["keep"], "chosen": p["keep"],
+               "why": p["why"], "because": p["because"], "when": p["taken"],
+               "dim": p["dimensions"], "size": p["size"]}
+        if revisit:
+            # Where it went and where it started. A review looked at again
+            # compares what the page says against what actually happened, so
+            # both ends of every move have to travel with the photograph.
+            out.update(gone=p["gone"], was=p["was"], now=p["now"])
+        return out
+
+    state = json.dumps([[_state(p) for p in g["photos"]
+                         if thumbs.get(p["path"])] for g in groups])
     return PAGE % dict(title=html.escape(title), subtitle=html.escape(subtitle),
                        style=STYLE, blocks="".join(blocks), state=state,
                        proposed="true" if proposed else "false",
-                       apply="Apply" if proposed
-                             else "Move what I did not keep")
+                       revisit="true" if revisit else "false",
+                       go="revise" if revisit else "apply",
+                       stop="close" if revisit else "quit",
+                       apply="No changes yet" if revisit
+                             else "Apply" if proposed
+                             else "Move what I did not keep",
+                       quit="Close — change nothing" if revisit
+                            else "Quit — move nothing")
 
 
 def ask_groups(groups, out_dir, title, subtitle, proposed=True):

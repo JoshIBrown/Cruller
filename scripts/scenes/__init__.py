@@ -59,6 +59,7 @@ def gather(records, gap=sessions.GAP, alike=ALIKE):
 
     found = []
     for shoot in sessions.split(records, gap):
+        grown = []
         waiting = list(shoot)
         while len(waiting) >= LEAST:
             seed = waiting.pop(0)
@@ -76,6 +77,47 @@ def gather(records, gap=sessions.GAP, alike=ALIKE):
                 members.append(best)
                 centre = middle([records[m] for m in members])
             if len(members) >= LEAST:
-                found.append(sorted(members, key=lambda i: records[i]["t"]))
+                members.sort(key=lambda i: records[i]["t"])
+                grown.append(members)
+        found.extend(_join(records, grown, alike))
     found.sort(key=len, reverse=True)
     return found
+
+
+def _join(records, grown, alike):
+    """Fold together the scenes that turn out to be the same scene.
+
+    A scene grows from wherever the first unclaimed photograph happens to be,
+    so one subject shot in two spells becomes two scenes and there is nothing
+    in the growing to notice. The eagle before it turned and the eagle after
+    are the same bird and belong in one group; splitting them is the thing
+    Josh could see and the algorithm could not.
+
+    The test between two scenes is the test inside one: everything in the
+    joined scene must still agree with its middle. Comparing the two middles
+    instead is what lets a scene walk — join a scene, the middle shifts, and
+    the shifted middle agrees with something the original never would. Guarded
+    this way the largest scene in a folder of landscapes came to 28
+    photographs; unguarded, the same folder produced one scene of 133 out of
+    144, which is not a scene but a shrug.
+    """
+    import numpy as np
+
+    scenes_here = [list(g) for g in grown]
+    again = True
+    while again:
+        again = False
+        for a in range(len(scenes_here)):
+            for b in range(a + 1, len(scenes_here)):
+                both = scenes_here[a] + scenes_here[b]
+                centre = middle([records[i] for i in both])
+                if min(float(resemblance.look(records[i]) @ centre)
+                       for i in both) < alike:
+                    continue
+                scenes_here[a] = sorted(both, key=lambda i: records[i]["t"])
+                del scenes_here[b]
+                again = True
+                break
+            if again:
+                break
+    return scenes_here

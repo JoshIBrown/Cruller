@@ -218,6 +218,25 @@ existed to let a person tune how much the tool would take, and round two takes
 nothing — it gathers scenes and a person keeps what they want, so the question
 the dial answered is now asked of every scene directly, by looking at it.
 
+## Joining two scenes that are one
+
+A scene grows from whichever photograph happens to be unclaimed first, so a
+subject shot, interrupted, and shot again becomes two scenes — and nothing in
+the growing can notice. The eagle before it turned and the eagle after are one
+bird, and splitting them is exactly what a person sees and the algorithm does
+not. So scenes within a shoot are folded together afterwards.
+
+The test between two scenes is the test inside one: **everything in the joined
+scene must still agree with its middle.** Comparing the two middles instead is
+what lets a scene walk — join, the middle shifts, and the shifted middle agrees
+with something the original never would. Guarded this way, the largest scene in
+a folder of 400 landscapes came to 28 photographs. Unguarded, the same folder
+produced a single scene of 133 out of 144, which is not a scene but a shrug.
+
+Joining stays inside a shoot, because a scene is photographs of one thing taken
+around one time. Whether it should reach across shoots — every photograph of
+that eagle, all year — is open, and only an eye can settle it.
+
 ## Gathering a scene
 
 Round two does not use the limit above, or the funnel, or the ladder. It asks a
@@ -254,8 +273,25 @@ and the hike disperses, which is the right way round.
 
 ## The review
 
-One page, one section per group, used by both rounds — because it is the same
-act either way: looking at a set of photographs and saying which to keep.
+One page, one section per group, used by both rounds and by a review opened
+again months later — because it is the same act every time: looking at a set of
+photographs and saying which to keep. Three pages would be three sets of
+keyboard shortcuts, three ideas of what green means, and one of them always the
+neglected one.
+
+Stepping through a group is the common act, so it costs nothing: **left and
+right arrows**, or the edges of the picture itself. Deciding is the rare act
+and takes a deliberate gesture — the box under the picture, the space bar, or a
+**double-click** on the frame. A single click only moves the eye, because a
+click that also changed a verdict would change one every time somebody looked.
+
+What a frame's fate is gets said in colour around the picture, green or red,
+and again around every thumbnail. A tick box alone was too quiet to read at a
+glance. Thumbnails show the whole frame rather than a square crop of it: a crop
+hides composition, which is the thing being judged.
+
+A group opens on a frame that is being **kept**. The one going is the argument;
+the one staying is what the argument is for.
 
 What differs is the starting point. **Round one arrives with a plan**, so its
 groups start read and leaving one alone means the plan stands. **Round two

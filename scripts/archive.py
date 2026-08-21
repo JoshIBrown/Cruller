@@ -18,13 +18,12 @@ facts, free to disagree with them.
 
 import base64
 import csv
-import html
 import io
-import json
 import os
 
 from loaders import open_image
-from review import GROUP, STYLE, _srgb
+import review
+from review import _srgb
 
 
 # Round one is derivatives of one photograph; round two is scenes there are too
@@ -99,9 +98,15 @@ def groups_of(records, job, setting, source):
             # The review holds the rule that named it — "crop", "non-hdr".
             # The log's reason is bookkeeping and only stands in when the
             # review has nothing to say.
+            # `path` is where the picture is read from; the page keys its
+            # thumbnails by it. `was` and `now` are what a change of mind
+            # needs, and they are what the two ends of a move are.
+            "path": move["to"] if move else was,
             "why": r.get("why") or (move or {}).get("why") or "",
             "because": r.get("reason") or "",
-            "when": 0.0, "dim": "", "size": ""})
+            "chosen": False, "difference": None,
+            "taken": 0.0, "when": 0.0, "dimensions": "", "dim": "",
+            "size": ""})
     out = []
     for gid in sorted(by_group, key=lambda g: (len(by_group[g]), g),
                       reverse=True):
@@ -124,7 +129,7 @@ def _thumb(photo):
         # Read before drafting: asking for a small picture changes what the
         # image says its size is, and what belongs on the page is the size of
         # the photograph, not of the copy being made to show it.
-        photo["dim"] = "%d×%d" % raw.size
+        photo["dim"] = photo["dimensions"] = "%d×%d" % raw.size
         photo["size"] = "%.1f" % (os.path.getsize(photo["now"]) / 1e6)
         try:
             raw.draft("RGB", (THUMB_LONG, THUMB_LONG))
@@ -141,156 +146,44 @@ def _thumb(photo):
 
 
 def render(out_dir, job, setting, state, progress=None):
-    """Draw one round as a page in `out_dir`. Returns its path, or None."""
+    """Draw one round as a page in `out_dir`. Returns its path, or None.
+
+    The same page the review itself uses. Looking at a group of photographs and
+    saying which to keep is one act whether it is happening for the first time
+    or the second, and two pages would be two sets of keyboard shortcuts, two
+    ideas of what green means, and one of them always the neglected one.
+    """
     os.makedirs(out_dir, exist_ok=True)
     total = sum(len(g["photos"]) for g in state)
     done = 0
-    blocks, kept = [], []
+    groups, thumbs = [], {}
     for g in state:
-        frames, rail, rows = [], [], []
+        photos = []
         for p in g["photos"]:
             pic = _thumb(p)
             done += 1
             if progress:
                 progress(done, total, "opening the review")
-            if not pic:
-                continue
-            i = len(rows)
-            on = " class='on'" if i == 0 else ""
-            frames.append('<img src="%s" data-i="%d"%s>' % (pic, i, on))
-            rail.append('<button type="button" class="pip" data-i="%d" '
-                        'onclick="pick(%d,%d)"><img src="%s">'
-                        '<span></span></button>' % (i, len(kept), i, pic))
-            rows.append(p)
-        if len(rows) < 2:
-            continue
-        gi = len(kept)
-        blocks.append(GROUP % dict(gi=gi, gi_1=gi + 1, n=len(rows), over="",
-                                   frames="".join(frames), rail="".join(rail)))
-        kept.append(rows)
-    if not kept:
+            if pic:
+                thumbs[p["path"]] = pic
+                photos.append(p)
+        if len(photos) >= 2:
+            groups.append({"id": g["id"], "worst": None, "photos": photos})
+    if not groups:
         return None
 
-    gone = sum(1 for g in kept for p in g if p["gone"])
-    stayed = sum(len(g) for g in kept) - gone
+    gone = sum(1 for g in groups for p in g["photos"] if p["gone"])
+    stayed = sum(len(g["photos"]) for g in groups) - gone
     what = NAMES[setting]
-    page = PAGE % dict(
-        title=html.escape(f"{job} — {what}"),
-        subtitle=html.escape(
-            f"{gone:,} moved out · {stayed:,} kept · "
-            f"{len(kept):,} group{'' if len(kept) == 1 else 's'} · "
-            f"change anything here and it is carried out"),
-        style=STYLE, blocks="".join(blocks), state=json.dumps(kept))
+    # The pictures travel inside the page, so there is no folder to name: the
+    # one they were served from is swept when the run that made them ends.
+    page = review._group_page(
+        groups, thumbs, f"{job} — {what}",
+        f"{gone:,} moved out · {stayed:,} kept · "
+        f"{len(groups):,} group{'' if len(groups) == 1 else 's'} · "
+        f"arrows to step through · double-click a picture to keep or drop it",
+        where=None, proposed=True, revisit=True)
     path = os.path.join(out_dir, f"{what}.html")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(page)
     return path
-
-
-PAGE = """<meta charset="utf-8"><meta name="viewport"
- content="width=device-width,initial-scale=1"><title>%(title)s</title>
-<style>
-%(style)s
- .pip.gone img { opacity:.34 }
- .fate { font-size:13px; font-weight:600 }
- .fate.gone { color:#d2544a }
- .fate.here { color:#79c07a }
- .fate.turn { color:#d9a441 }
- section.changed { box-shadow:inset 3px 0 0 #d9a441 }
- section.changed .head { background:#33290f }
- a.orig { color:#7aa7d8; font-size:12px; margin-left:12px;
-          text-decoration:none }
- a.orig:hover { text-decoration:underline }
-</style>
-<header><h1>%(title)s</h1><div class="sub">%(subtitle)s</div></header>
-<main id="list">%(blocks)s</main>
-<footer>
-  <button class="go" id="save" onclick="finish()" disabled>No changes yet</button>
-  <button class="plain" onclick="finish(true)">Close &mdash; change nothing</button>
-  <span id="tally"></span>
-</footer>
-<div id="done"></div>
-<script>
-const G = %(state)s;
-const AT = G.map(() => 0);
-// What the folder looks like now, and what it would look like if this page
-// were carried out. The two differing is the only reason to have opened it.
-const WANT = G.map(g => g.map(p => p.keep));
-
-function pick(gi, i) { AT[gi] = i; paint(gi); }
-function setkeep(gi, on) { WANT[gi][AT[gi]] = on; paint(gi); }
-function all(gi, on) { WANT[gi] = WANT[gi].map(() => on); paint(gi); }
-function note() {}
-
-// A photograph kept and now unwanted goes out; one culled and now wanted comes
-// back. Both are a single move, and both can be undone again tomorrow.
-function changes() {
-  const out = [];
-  G.forEach((g, gi) => g.forEach((p, i) => {
-    if (WANT[gi][i] !== p.keep)
-      out.push({file: p.file, from: p.now, to: p.was, restore: p.gone});
-  }));
-  return out;
-}
-
-function paint(gi) {
-  const g = G[gi], at = AT[gi];
-  document.querySelectorAll('#s' + gi + ' img').forEach(im =>
-    im.classList.toggle('on', +im.dataset.i === at));
-  document.querySelectorAll('section[data-g="' + gi + '"] .pip').forEach(b => {
-    const i = +b.dataset.i;
-    b.classList.toggle('on', i === at);
-    b.classList.toggle('keep', WANT[gi][i]);
-    b.classList.toggle('gone', !WANT[gi][i]);
-  });
-  const p = g[at];
-  document.getElementById('k' + gi).checked = WANT[gi][at];
-  // Where it is, and where this page would put it. Saying only the first
-  // reads as a contradiction the moment somebody ticks the box.
-  const want = WANT[gi][at], now = p.gone ? 'moved out' : 'kept';
-  const turn = want === p.keep ? ''
-    : (p.gone ? ' \u2192 putting it back' : ' \u2192 moving it out');
-  document.getElementById('g' + gi).innerHTML =
-    '<span class="fate ' + (turn ? 'turn' : p.gone ? 'gone' : 'here') + '">'
-    + now + turn + '</span>'
-    + '<a class="orig" href="file://' + encodeURI(p.now) + '">open it</a>';
-  document.getElementById('f' + gi).textContent =
-    [p.dim, p.size + ' MB', p.why, p.because].filter(Boolean).join(' \\u00b7 ');
-  const differs = g.some((q, i) => WANT[gi][i] !== q.keep);
-  document.querySelector('section[data-g="' + gi + '"]')
-          .classList.toggle('changed', differs);
-  document.getElementById('t' + gi).textContent =
-    (differs ? 'changed \\u2014 ' : '')
-    + 'keeping ' + WANT[gi].filter(Boolean).length + ' of ' + g.length;
-  tally();
-}
-
-function tally() {
-  const c = changes(), b = document.getElementById('save');
-  const back = c.filter(x => x.restore).length;
-  document.getElementById('tally').textContent = c.length
-    ? back + ' to put back \\u00b7 ' + (c.length - back) + ' to move out' : '';
-  b.disabled = !c.length;
-  b.textContent = c.length
-    ? 'Carry out ' + c.length + ' change' + (c.length === 1 ? '' : 's')
-    : 'No changes yet';
-}
-
-function finish(nothing) {
-  const c = nothing ? [] : changes();
-  fetch('', {method: 'POST', headers: {'Content-Type': 'application/json'},
-             body: JSON.stringify({action: c.length ? 'revise' : 'close',
-                                   changes: c})})
-    .finally(() => {
-      document.querySelector('footer').style.display = 'none';
-      const d = document.getElementById('done');
-      d.style.display = 'block';
-      d.textContent = c.length
-        ? 'Carrying out ' + c.length + ' change' + (c.length === 1 ? '' : 's')
-          + '. You can close this page.'
-        : 'Nothing changed. You can close this page.';
-    });
-}
-
-G.forEach((_, i) => paint(i));
-</script>"""
